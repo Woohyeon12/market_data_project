@@ -5,8 +5,15 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from app.schemas.research import IndexChart, IndexChartPoint, MarketInstrument
+from app.storage.market_history import (
+    count_ohlc_points,
+    latest_ohlc_source,
+    load_ohlc_points,
+    save_ohlc_points,
+)
 
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
+MIN_HISTORY_POINTS = 1800
 
 TRACKED_INSTRUMENTS = [
     ("AAPL", "Apple", "US Stocks", "United States", "USD", 190.0, 0.0),
@@ -142,7 +149,7 @@ def _fetch_yahoo_index_chart(
     fallback_closes: list[float],
 ) -> IndexChart:
     request = Request(
-        f"{YAHOO_CHART_URL}/{quote(symbol, safe='')}?range=1mo&interval=1d",
+        f"{YAHOO_CHART_URL}/{quote(symbol, safe='')}?range=10y&interval=1d",
         headers={
             "Accept": "application/json",
             "User-Agent": "btc-research-ai/0.1",
@@ -179,15 +186,36 @@ def _fetch_yahoo_index_chart(
         if len(points) < 2:
             return _fallback_index_chart(symbol, name, currency, fallback_closes)
 
+        save_ohlc_points(symbol=symbol, points=points, source="Yahoo Finance")
+
         return IndexChart(
             symbol=symbol,
             name=name,
             currency=result["meta"].get("currency") or currency,
             points=points,
-            data_source="Yahoo Finance",
+            data_source=f"Yahoo Finance DB ({len(points)} rows)",
         )
     except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError):
         return _fallback_index_chart(symbol, name, currency, fallback_closes)
+
+
+def _get_index_chart(
+    symbol: str,
+    name: str,
+    currency: str,
+    fallback_closes: list[float],
+) -> IndexChart:
+    if count_ohlc_points(symbol) < MIN_HISTORY_POINTS:
+        return _fetch_yahoo_index_chart(symbol, name, currency, fallback_closes)
+
+    points = load_ohlc_points(symbol)
+    return IndexChart(
+        symbol=symbol,
+        name=name,
+        currency=currency,
+        points=points,
+        data_source=f"{latest_ohlc_source(symbol) or 'SQLite'} DB ({len(points)} rows)",
+    )
 
 
 def get_global_markets() -> list[MarketInstrument]:
@@ -199,6 +227,6 @@ def get_global_markets() -> list[MarketInstrument]:
 
 def get_index_charts() -> list[IndexChart]:
     return [
-        _fetch_yahoo_index_chart(*chart)
+        _get_index_chart(*chart)
         for chart in TRACKED_INDEX_CHARTS
     ]

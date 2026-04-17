@@ -9,6 +9,7 @@ import {
   type IndexChart,
   type MarketInstrument,
   type MarketsOverview,
+  type NewsItem,
   type ResearchReport,
 } from "../lib/api";
 
@@ -67,18 +68,28 @@ function chartChangePct(chart: IndexChart) {
   return first ? ((last - first) / first) * 100 : 0;
 }
 
+function sampledChartPoints(chart: IndexChart, maxPoints = 120) {
+  if (chart.points.length <= maxPoints) {
+    return chart.points;
+  }
+
+  const step = Math.ceil(chart.points.length / maxPoints);
+  return chart.points.filter((_, index) => index % step === 0);
+}
+
 function candleGeometry(chart: IndexChart) {
   const width = 280;
   const height = 96;
-  const highs = chart.points.map((point) => point.high);
-  const lows = chart.points.map((point) => point.low);
+  const points = sampledChartPoints(chart);
+  const highs = points.map((point) => point.high);
+  const lows = points.map((point) => point.low);
   const min = Math.min(...lows);
   const max = Math.max(...highs);
   const range = max - min || 1;
-  const slot = chart.points.length ? width / chart.points.length : width;
-  const bodyWidth = Math.max(4, Math.min(12, slot * 0.58));
+  const slot = points.length ? width / points.length : width;
+  const bodyWidth = Math.max(1.5, Math.min(8, slot * 0.58));
 
-  return chart.points.map((point, index) => {
+  return points.map((point, index) => {
     const centerX = slot * index + slot / 2;
     const y = (value: number) => height - ((value - min) / range) * height;
     const openY = y(point.open);
@@ -102,9 +113,15 @@ function candleGeometry(chart: IndexChart) {
   });
 }
 
+function newsKey(item: NewsItem) {
+  return `${item.source}-${item.title}`;
+}
+
 export function ResearchDashboard() {
   const [report, setReport] = useState<ResearchReport>(fallbackReport);
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
+  const [newsFilter, setNewsFilter] = useState("all");
+  const [selectedNewsKey, setSelectedNewsKey] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -135,6 +152,9 @@ export function ResearchDashboard() {
     1,
     ...marketCategories.map(([, items]) => Math.abs(averageChange(items))),
   );
+  const filteredNews = report.news.filter((item) => {
+    return newsFilter === "all" || item.sentiment === newsFilter;
+  });
 
   return (
     <main className="page">
@@ -228,7 +248,7 @@ export function ResearchDashboard() {
                       className="candle-plot"
                       viewBox="0 0 280 96"
                       role="img"
-                      aria-label={`${chart.name} one month candlestick plot`}
+                      aria-label={`${chart.name} ten year candlestick plot`}
                     >
                       <line x1="0" y1="92" x2="280" y2="92" />
                       {candleGeometry(chart).map((candle) => (
@@ -253,6 +273,7 @@ export function ResearchDashboard() {
                     </svg>
                     <div className="chart-range">
                       <span>{firstPoint?.date ?? "Start"}</span>
+                      <span>{chart.points.length.toLocaleString()} DB rows</span>
                       <span>{lastPoint?.date ?? "Latest"}</span>
                     </div>
                   </article>
@@ -314,14 +335,51 @@ export function ResearchDashboard() {
 
           <div className="panel">
             <h2>News Signals</h2>
-            <ul className="news-list">
-              {report.news.map((item) => (
-                <li key={`${item.source}-${item.title}`}>
-                  {item.title} <strong>({item.sentiment})</strong>
-                  <span className="item-source">Source: {item.data_source}</span>
-                </li>
+            <div className="news-toolbar" aria-label="News sentiment filter">
+              {["all", "positive", "neutral", "negative"].map((filter) => (
+                <button
+                  className={newsFilter === filter ? "filter-active" : ""}
+                  key={filter}
+                  onClick={() => setNewsFilter(filter)}
+                  type="button"
+                >
+                  {filter}
+                </button>
               ))}
-            </ul>
+            </div>
+            <div className="news-card-list">
+              {filteredNews.map((item) => {
+                const key = newsKey(item);
+                const selected = selectedNewsKey === key;
+
+                return (
+                  <article className="news-card" key={key}>
+                    <button
+                      aria-expanded={selected}
+                      className="news-toggle"
+                      onClick={() => setSelectedNewsKey(selected ? null : key)}
+                      type="button"
+                    >
+                      <span>{item.title}</span>
+                      <strong className={`sentiment-${item.sentiment}`}>
+                        {item.sentiment}
+                      </strong>
+                    </button>
+                    {selected ? (
+                      <div className="news-detail">
+                        <span>Source: {item.source}</span>
+                        <span>Data: {item.data_source}</span>
+                        {item.url ? (
+                          <a href={item.url} rel="noreferrer" target="_blank">
+                            Open original
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
           </div>
 
           <div className="panel">

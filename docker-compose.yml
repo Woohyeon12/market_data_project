@@ -5,8 +5,11 @@ services:
     environment:
       APP_ENV: local
       API_KEY: change-me-before-public-launch
+      MARKET_HISTORY_DB_PATH: /app/data/market_history.sqlite
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
 
   frontend:
     build:
