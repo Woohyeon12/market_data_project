@@ -158,6 +158,53 @@ h1 {
   gap: 16px;
 }
 
+.market-summary-bars {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px;
+  background: #f2f5f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.summary-bar-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) minmax(120px, 1fr) 72px;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.summary-bar-track,
+.move-bar {
+  overflow: hidden;
+  background: #e0e6ec;
+  border-radius: 6px;
+}
+
+.summary-bar-track {
+  height: 12px;
+}
+
+.summary-bar-positive,
+.summary-bar-negative,
+.move-fill-positive,
+.move-fill-negative {
+  height: 100%;
+  border-radius: 6px;
+}
+
+.summary-bar-positive,
+.move-fill-positive {
+  background: var(--accent);
+}
+
+.summary-bar-negative,
+.move-fill-negative {
+  background: var(--warning);
+}
+
 .market-group {
   display: grid;
   gap: 10px;
@@ -189,6 +236,12 @@ h1 {
   margin-top: 4px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.move-bar {
+  width: min(260px, 100%);
+  height: 8px;
+  margin-top: 10px;
 }
 
 .market-values {
@@ -251,6 +304,10 @@ h1 {
   }
 
   .market-row {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-bar-row {
     grid-template-columns: 1fr;
   }
 

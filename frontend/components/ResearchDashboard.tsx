@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
-  fallbackReport,
   fallbackMarkets,
+  fallbackReport,
   fetchBtcResearch,
   fetchMarketsOverview,
   type MarketInstrument,
@@ -43,6 +43,22 @@ function groupInstruments(instruments: MarketInstrument[]) {
   }, {});
 }
 
+function averageChange(items: MarketInstrument[]) {
+  if (items.length === 0) {
+    return 0;
+  }
+
+  return items.reduce((total, item) => total + item.change_pct, 0) / items.length;
+}
+
+function barWidth(changePct: number, maxAbsChange: number) {
+  if (maxAbsChange === 0) {
+    return "0%";
+  }
+
+  return `${Math.min(Math.abs(changePct) / maxAbsChange, 1) * 100}%`;
+}
+
 export function ResearchDashboard() {
   const [report, setReport] = useState<ResearchReport>(fallbackReport);
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
@@ -67,6 +83,15 @@ export function ResearchDashboard() {
   }, []);
 
   const groupedMarkets = groupInstruments(markets.instruments);
+  const marketCategories = Object.entries(groupedMarkets);
+  const maxMarketChange = Math.max(
+    1,
+    ...markets.instruments.map((item) => Math.abs(item.change_pct)),
+  );
+  const maxCategoryChange = Math.max(
+    1,
+    ...marketCategories.map(([, items]) => Math.abs(averageChange(items))),
+  );
 
   return (
     <main className="page">
@@ -139,8 +164,28 @@ export function ResearchDashboard() {
             <p className="source-label">
               Updated {new Date(markets.generated_at).toLocaleString()}
             </p>
+            <div className="market-summary-bars" aria-label="Average market moves by category">
+              {marketCategories.map(([category, items]) => {
+                const changePct = averageChange(items);
+
+                return (
+                  <div className="summary-bar-row" key={category}>
+                    <span>{category}</span>
+                    <div className="summary-bar-track">
+                      <div
+                        className={changePct >= 0 ? "summary-bar-positive" : "summary-bar-negative"}
+                        style={{ width: barWidth(changePct, maxCategoryChange) }}
+                      />
+                    </div>
+                    <strong className={changePct >= 0 ? "change-positive" : "change-negative"}>
+                      {changePct.toFixed(2)}%
+                    </strong>
+                  </div>
+                );
+              })}
+            </div>
             <div className="market-watch">
-              {Object.entries(groupedMarkets).map(([category, items]) => (
+              {marketCategories.map(([category, items]) => (
                 <section className="market-group" key={category}>
                   <h3>{category}</h3>
                   <div className="market-table">
@@ -148,7 +193,13 @@ export function ResearchDashboard() {
                       <div className="market-row" key={item.symbol}>
                         <div>
                           <strong>{item.name}</strong>
-                          <span>{item.symbol} · {item.market}</span>
+                          <span>{item.symbol} - {item.market}</span>
+                          <div className="move-bar" aria-label={`${item.name} daily move`}>
+                            <div
+                              className={item.change_pct >= 0 ? "move-fill-positive" : "move-fill-negative"}
+                              style={{ width: barWidth(item.change_pct, maxMarketChange) }}
+                            />
+                          </div>
                         </div>
                         <div className="market-values">
                           <strong>{formatMarketPrice(item)}</strong>
