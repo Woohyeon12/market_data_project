@@ -118,12 +118,14 @@ h1 {
 }
 
 .panel:nth-child(3),
-.panel:nth-child(5),
-.panel:nth-child(6) {
+.panel:nth-child(7),
+.panel:nth-child(8) {
   grid-column: span 6;
 }
 
-.panel:nth-child(4) {
+.panel:nth-child(4),
+.panel:nth-child(5),
+.panel:nth-child(6) {
   grid-column: span 12;
 }
 
@@ -416,6 +418,139 @@ h1 {
   padding-left: 20px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.empty-state {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 14px;
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.empty-state p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.model-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.model-card-header h3 {
+  margin-bottom: 4px;
+}
+
+.model-card-header span,
+.model-meta,
+.model-card p,
+.model-instructions {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.status-ok,
+.status-muted {
+  align-self: start;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.status-ok {
+  color: #ffffff;
+  background: var(--accent-strong);
+}
+
+.status-muted {
+  color: var(--muted);
+  background: var(--ink-soft);
+}
+
+.model-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.model-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-metrics span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-equity-curve {
+  width: 100%;
+  height: 86px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-equity-curve line {
+  stroke: #d9dee3;
+  stroke-width: 1;
+}
+
+.model-equity-curve path {
+  fill: none;
+  stroke: var(--accent-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.model-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.feature-pills,
+.model-instructions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.feature-pills span,
+.model-instructions span {
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 
 .market-summary-bars {
@@ -833,8 +968,13 @@ h1 {
   .metric-row,
   .scenario-grid,
   .index-chart-grid,
-  .relationship-grid {
+  .relationship-grid,
+  .model-grid {
     grid-template-columns: 1fr;
+  }
+
+  .model-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .panel:nth-child(n) {

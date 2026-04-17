@@ -10,3 +10,5 @@ coverage/
 .DS_Store
 backend/data/*.sqlite
 backend/data/*.sqlite-*
+backend/model_registry/*.json
+!backend/model_registry/example_model.json

@@ -22,6 +22,7 @@ btc-research-ai/
       models/       prediction/scenario model adapters
       schemas/      API response/request contracts
       services/     business logic orchestration
+    model_registry/ JSON model weight files for local backtests
   frontend/
     app/            Next.js app router pages
     components/     reusable UI components
@@ -64,6 +65,14 @@ http://localhost:3000
 docker compose up --build
 ```
 
+## Model Backtests
+
+Put enabled JSON model files in `backend/model_registry`.
+
+The backend reads weighted boosting, bagging, or ensemble exports from that folder and evaluates each signal on the latest 504 trading observations, roughly two years. Signals from date T are scored against BTC return on date T+1. The dashboard shows Sharpe ratio, win rate, total return, max drawdown, exposure, and a compact equity curve.
+
+See `backend/model_registry/README.md` for the supported feature names and JSON format. User JSON files are ignored by Git by default so private model weights are not pushed accidentally.
+
 ## Next Things To Add
 
 - Expand the first CoinGecko market data integration with retries, caching, and monitoring.
@@ -71,7 +80,7 @@ docker compose up --build
 - Add PostgreSQL or Supabase for report history.
 - Add scheduled collection and report generation.
 - Add API key protection before public launch.
-- Add backtests before presenting predictions as model output.
+- Expand backtests with transaction costs, walk-forward validation, and model version history.
 
 ## Important Disclaimer
 

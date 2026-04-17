@@ -82,6 +82,42 @@ export type CorrelationAnalysis = {
   data_source: string;
 };
 
+export type ModelEquityPoint = {
+  date: string;
+  equity: number;
+  daily_return_pct: number;
+  position: number;
+};
+
+export type ModelBacktestResult = {
+  name: string;
+  model_type: string;
+  file_name: string;
+  status: string;
+  message: string;
+  sharpe_ratio: number;
+  win_rate_pct: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  trades: number;
+  exposure_pct: number;
+  observations: number;
+  backtest_start?: string | null;
+  backtest_end?: string | null;
+  features: string[];
+  equity_curve: ModelEquityPoint[];
+};
+
+export type ModelBacktestOverview = {
+  generated_at: string;
+  model_folder: string;
+  evaluation_window: string;
+  available_features: string[];
+  results: ModelBacktestResult[];
+  instructions: string[];
+  disclaimer: string;
+};
+
 export type MarketsOverview = {
   generated_at: string;
   instruments: MarketInstrument[];
@@ -90,6 +126,29 @@ export type MarketsOverview = {
   correlations: CorrelationAnalysis;
   summary: string[];
   disclaimer: string;
+};
+
+export const fallbackModelBacktests: ModelBacktestOverview = {
+  generated_at: new Date().toISOString(),
+  model_folder: "backend/model_registry",
+  evaluation_window: "latest 504 trading observations, approximately two years",
+  available_features: [
+    "btc_return_1d",
+    "btc_rsi_14",
+    "btc_volatility_20d",
+    "btc_drawdown_60d",
+    "sp500_return_1d",
+    "nasdaq_return_1d",
+    "gold_return_1d",
+    "us10y_bp_chg",
+  ],
+  results: [],
+  instructions: [
+    "Place enabled JSON model files in backend/model_registry.",
+    "Each file should include weights or derived_variables keyed by available feature names.",
+    "The backend evaluates each signal against next-day BTC returns.",
+  ],
+  disclaimer: "Backtests are research diagnostics only. They are not live trading recommendations.",
 };
 
 export const fallbackReport: ResearchReport = {
@@ -340,5 +399,23 @@ export async function fetchMarketsOverview(): Promise<MarketsOverview> {
     return response.json();
   } catch {
     return fallbackMarkets;
+  }
+}
+
+export async function fetchModelBacktests(): Promise<ModelBacktestOverview> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+
+  try {
+    const response = await fetch(`${baseUrl}/research/model-backtests`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return fallbackModelBacktests;
+    }
+
+    return response.json();
+  } catch {
+    return fallbackModelBacktests;
   }
 }

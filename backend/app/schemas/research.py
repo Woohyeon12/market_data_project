@@ -59,6 +59,42 @@ class CorrelationAnalysis(BaseModel):
     data_source: str = "Local fallback"
 
 
+class ModelEquityPoint(BaseModel):
+    date: str
+    equity: float
+    daily_return_pct: float
+    position: float
+
+
+class ModelBacktestResult(BaseModel):
+    name: str
+    model_type: str
+    file_name: str
+    status: str
+    message: str
+    sharpe_ratio: float
+    win_rate_pct: float
+    total_return_pct: float
+    max_drawdown_pct: float
+    trades: int
+    exposure_pct: float
+    observations: int
+    backtest_start: str | None = None
+    backtest_end: str | None = None
+    features: list[str] = []
+    equity_curve: list[ModelEquityPoint] = []
+
+
+class ModelBacktestOverview(BaseModel):
+    generated_at: datetime
+    model_folder: str
+    evaluation_window: str
+    available_features: list[str]
+    results: list[ModelBacktestResult]
+    instructions: list[str]
+    disclaimer: str
+
+
 class NewsItem(BaseModel):
     title: str
     source: str

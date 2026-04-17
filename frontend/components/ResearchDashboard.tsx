@@ -3,12 +3,16 @@
 import { Fragment, useEffect, useState } from "react";
 import {
   fallbackMarkets,
+  fallbackModelBacktests,
   fallbackReport,
   fetchBtcResearch,
   fetchMarketsOverview,
+  fetchModelBacktests,
   type IndexChart,
   type MarketInstrument,
   type MarketsOverview,
+  type ModelBacktestOverview,
+  type ModelEquityPoint,
   type NewsItem,
   type ResearchReport,
   type CorrelationCell,
@@ -373,9 +377,44 @@ function correlationAction(cell: CorrelationCell) {
   return "Track as a possible hedge, stress, or regime-warning input.";
 }
 
+function formatPercent(value: number) {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function modelCurveGeometry(points: ModelEquityPoint[]) {
+  const width = 260;
+  const height = 72;
+  const pad = 6;
+
+  if (points.length === 0) {
+    return { width, height, path: "", baseline: height - pad };
+  }
+
+  const values = points.map((point) => point.equity);
+  const min = Math.min(...values, 1);
+  const max = Math.max(...values, 1);
+  const range = max - min || 1;
+  const slot = points.length > 1 ? (width - pad * 2) / (points.length - 1) : 0;
+  const yForValue = (value: number) => height - pad - ((value - min) / range) * (height - pad * 2);
+  const path = points
+    .map((point, index) => {
+      const command = index === 0 ? "M" : "L";
+      return `${command} ${pad + slot * index} ${yForValue(point.equity)}`;
+    })
+    .join(" ");
+
+  return {
+    width,
+    height,
+    path,
+    baseline: yForValue(1),
+  };
+}
+
 export function ResearchDashboard() {
   const [report, setReport] = useState<ResearchReport>(fallbackReport);
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
+  const [modelBacktests, setModelBacktests] = useState<ModelBacktestOverview>(fallbackModelBacktests);
   const [newsFilter, setNewsFilter] = useState("all");
   const [selectedNewsKey, setSelectedNewsKey] = useState<string | null>(null);
   const [chartRange, setChartRange] = useState("10y");
@@ -395,6 +434,11 @@ export function ResearchDashboard() {
     fetchMarketsOverview().then((nextMarkets) => {
       if (active) {
         setMarkets(nextMarkets);
+      }
+    });
+    fetchModelBacktests().then((nextModelBacktests) => {
+      if (active) {
+        setModelBacktests(nextModelBacktests);
       }
     });
 
@@ -823,6 +867,93 @@ export function ResearchDashboard() {
                 <li key={insight}>{insight}</li>
               ))}
             </ul>
+          </div>
+
+          <div className="panel">
+            <h2>Model Backtest Lab</h2>
+            <p className="source-label">
+              Folder: {modelBacktests.model_folder} - {modelBacktests.evaluation_window}
+            </p>
+            {modelBacktests.results.length === 0 ? (
+              <div className="empty-state">
+                <strong>No enabled model files yet.</strong>
+                <p>
+                  Put weighted boosting, bagging, or ensemble JSON files in the model registry to backtest them against recent BTC returns.
+                </p>
+              </div>
+            ) : (
+              <div className="model-grid" aria-label="Model backtest results">
+                {modelBacktests.results.map((model) => {
+                  const curve = modelCurveGeometry(model.equity_curve);
+                  const healthy = model.status === "ok";
+
+                  return (
+                    <article className="model-card" key={`${model.file_name}-${model.name}`}>
+                      <div className="model-card-header">
+                        <div>
+                          <h3>{model.name}</h3>
+                          <span>{model.model_type} - {model.file_name}</span>
+                        </div>
+                        <strong className={healthy ? "status-ok" : "status-muted"}>
+                          {model.status}
+                        </strong>
+                      </div>
+                      <div className="model-metrics">
+                        <div>
+                          <span>Sharpe</span>
+                          <strong>{model.sharpe_ratio.toFixed(2)}</strong>
+                        </div>
+                        <div>
+                          <span>Win rate</span>
+                          <strong>{model.win_rate_pct.toFixed(1)}%</strong>
+                        </div>
+                        <div>
+                          <span>Total</span>
+                          <strong className={model.total_return_pct >= 0 ? "change-positive" : "change-negative"}>
+                            {formatPercent(model.total_return_pct)}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>MDD</span>
+                          <strong className="change-negative">{model.max_drawdown_pct.toFixed(2)}%</strong>
+                        </div>
+                      </div>
+                      {model.equity_curve.length ? (
+                        <svg
+                          className="model-equity-curve"
+                          viewBox={`0 0 ${curve.width} ${curve.height}`}
+                          role="img"
+                          aria-label={`${model.name} equity curve`}
+                        >
+                          <line x1="0" y1={curve.baseline} x2={curve.width} y2={curve.baseline} />
+                          <path d={curve.path} />
+                        </svg>
+                      ) : null}
+                      <div className="model-meta">
+                        <span>{model.observations.toLocaleString()} observations</span>
+                        <span>{model.exposure_pct.toFixed(1)}% exposure</span>
+                        <span>{model.trades.toLocaleString()} position changes</span>
+                        {model.backtest_start && model.backtest_end ? (
+                          <span>{model.backtest_start} to {model.backtest_end}</span>
+                        ) : null}
+                      </div>
+                      <p>{model.message}</p>
+                      <div className="feature-pills">
+                        {model.features.slice(0, 8).map((feature) => (
+                          <span key={`${model.file_name}-${feature}`}>{feature}</span>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+            <div className="model-instructions">
+              {modelBacktests.instructions.map((instruction) => (
+                <span key={instruction}>{instruction}</span>
+              ))}
+            </div>
+            <p className="disclaimer">{modelBacktests.disclaimer}</p>
           </div>
 
           <div className="panel">
