@@ -695,6 +695,32 @@ export function ResearchDashboard() {
               <div />
               <span>Positive</span>
             </div>
+            <div className="correlation-commentary" aria-label="AI research commentary">
+              {markets.correlations.commentary.map((comment) => (
+                <p key={comment}>{comment}</p>
+              ))}
+            </div>
+            <div className="lag-correlation-table" aria-label="Lead lag correlation table">
+              <div className="lag-correlation-header">
+                <span>Leading feature</span>
+                <span>Lag</span>
+                <span>Corr.</span>
+              </div>
+              {markets.correlations.lag_correlations.slice(0, 12).map((item) => (
+                <div className="lag-correlation-row" key={`${item.feature}-${item.lag_days}`}>
+                  <span>{item.feature}</span>
+                  <span>{item.lag_days}D</span>
+                  <strong
+                    style={{
+                      background: correlationColor(item.value),
+                      color: correlationTextColor(item.value),
+                    }}
+                  >
+                    {item.value.toFixed(2)}
+                  </strong>
+                </div>
+              ))}
+            </div>
             <ul className="correlation-insights">
               {markets.correlations.insights.map((insight) => (
                 <li key={insight}>{insight}</li>

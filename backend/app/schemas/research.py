@@ -43,10 +43,18 @@ class CorrelationCell(BaseModel):
     value: float
 
 
+class LagCorrelation(BaseModel):
+    feature: str
+    lag_days: int
+    value: float
+
+
 class CorrelationAnalysis(BaseModel):
     lookback_days: int
     assets: list[str]
     matrix: list[CorrelationCell]
+    lag_correlations: list[LagCorrelation] = []
+    commentary: list[str] = []
     insights: list[str]
     data_source: str = "Local fallback"
 

@@ -66,10 +66,18 @@ export type CorrelationCell = {
   value: number;
 };
 
+export type LagCorrelation = {
+  feature: string;
+  lag_days: number;
+  value: number;
+};
+
 export type CorrelationAnalysis = {
   lookback_days: number;
   assets: string[];
   matrix: CorrelationCell[];
+  lag_correlations: LagCorrelation[];
+  commentary: string[];
   insights: string[];
   data_source: string;
 };
@@ -276,6 +284,15 @@ export const fallbackMarkets: MarketsOverview = {
       { x: "S&P 500 return", y: "BTC RSI(14)", value: 0.12 },
       { x: "US 10Y bp chg", y: "BTC RSI(14)", value: -0.08 },
       { x: "BTC RSI(14)", y: "BTC RSI(14)", value: 1 },
+    ],
+    lag_correlations: [
+      { feature: "S&P 500 return", lag_days: 1, value: 0.18 },
+      { feature: "US 10Y bp chg", lag_days: 5, value: -0.1 },
+      { feature: "BTC RSI(14)", lag_days: 20, value: 0.08 },
+    ],
+    commentary: [
+      "This is an explanatory research signal map, not a causal model or investment recommendation.",
+      "Live commentary will appear after the backend feature engine responds.",
     ],
     insights: [
       "Feature heatmap is waiting for backend data.",

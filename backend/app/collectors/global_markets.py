@@ -4,7 +4,14 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from app.schemas.research import CorrelationAnalysis, CorrelationCell, IndexChart, IndexChartPoint, MarketInstrument
+from app.schemas.research import (
+    CorrelationAnalysis,
+    CorrelationCell,
+    IndexChart,
+    IndexChartPoint,
+    LagCorrelation,
+    MarketInstrument,
+)
 from app.storage.market_history import (
     count_ohlc_points,
     latest_ohlc_source,
@@ -372,6 +379,57 @@ def _feature_label(chart_name: str, suffix: str) -> str:
     return f"{short_names.get(chart_name, chart_name)} {suffix}"
 
 
+def _lag_correlation(
+    feature: dict[str, float],
+    target: dict[str, float],
+    lag_days: int,
+) -> float:
+    common_dates = sorted(set(feature) & set(target))
+    if len(common_dates) <= lag_days + 20:
+        return 0.0
+
+    feature_values = []
+    target_values = []
+    for index in range(0, len(common_dates) - lag_days):
+        feature_values.append(feature[common_dates[index]])
+        target_values.append(target[common_dates[index + lag_days]])
+
+    return _correlation(feature_values, target_values)
+
+
+def _research_commentary(
+    matrix: list[CorrelationCell],
+    lag_correlations: list[LagCorrelation],
+    target_name: str,
+) -> list[str]:
+    target_pairs = [
+        cell
+        for cell in matrix
+        if cell.y == target_name and cell.x != target_name
+    ]
+    positive = max(target_pairs, key=lambda cell: cell.value, default=None)
+    negative = min(target_pairs, key=lambda cell: cell.value, default=None)
+    leading = max(lag_correlations, key=lambda item: abs(item.value), default=None)
+    commentary = [
+        "This is an explanatory research signal map, not a causal model or investment recommendation.",
+    ]
+
+    if positive:
+        commentary.append(
+            f"The strongest same-day BTC relationship is {positive.x} at {positive.value:.2f}, so this feature deserves priority in daily monitoring."
+        )
+    if negative:
+        commentary.append(
+            f"The weakest same-day BTC relationship is {negative.x} at {negative.value:.2f}, which may act as a diversification or regime-warning input."
+        )
+    if leading:
+        commentary.append(
+            f"The strongest lead/lag signal is {leading.feature} leading BTC by {leading.lag_days} trading days at {leading.value:.2f}."
+        )
+
+    return commentary
+
+
 def build_correlation_analysis(
     charts: list[IndexChart],
     lookback_days: int = 252,
@@ -383,6 +441,8 @@ def build_correlation_analysis(
             lookback_days=lookback_days,
             assets=[],
             matrix=[],
+            lag_correlations=[],
+            commentary=[],
             insights=["Bitcoin history is required before feature correlation can run."],
             data_source="SQLite OHLC engineered features",
         )
@@ -423,9 +483,30 @@ def build_correlation_analysis(
     btc_pairs = [cell for cell in matrix if cell.y == target_name and cell.x != target_name]
     strongest_positive = max(btc_pairs, key=lambda cell: cell.value, default=None)
     strongest_negative = min(btc_pairs, key=lambda cell: cell.value, default=None)
+    lag_correlations = []
+    for feature_name, series in feature_series.items():
+        if feature_name == target_name:
+            continue
+
+        for lag_days in (1, 5, 20):
+            lag_correlations.append(
+                LagCorrelation(
+                    feature=feature_name,
+                    lag_days=lag_days,
+                    value=round(_lag_correlation(series, feature_series[target_name], lag_days), 2),
+                )
+            )
+
+    lag_correlations = sorted(
+        lag_correlations,
+        key=lambda item: abs(item.value),
+        reverse=True,
+    )
+    commentary = _research_commentary(matrix, lag_correlations, target_name)
     insights = [
         f"Feature heatmap compares engineered variables over the latest {lookback_days} trading days.",
         "Rate features use daily yield changes in basis points; market features use daily percentage returns.",
+        "Lag table tests whether each feature leads BTC returns by 1, 5, or 20 trading days.",
     ]
     if strongest_positive:
         insights.append(f"Strongest positive feature is {strongest_positive.x} at {strongest_positive.value:.2f}.")
@@ -436,6 +517,8 @@ def build_correlation_analysis(
         lookback_days=lookback_days,
         assets=feature_names,
         matrix=matrix,
+        lag_correlations=lag_correlations,
+        commentary=commentary,
         insights=insights,
         data_source="SQLite OHLC engineered feature heatmap",
     )

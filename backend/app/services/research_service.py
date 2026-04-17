@@ -57,6 +57,7 @@ def build_markets_overview() -> MarketsOverview:
             "Global market overview includes selected US, Korea, and Japan equities.",
             "Major indices, gold spot, and government bond yields are included for macro context around BTC research.",
             "Feature correlation heatmap compares BTC returns, market returns, yield changes, RSI, volatility, and drawdown factors.",
+            "Lead-lag correlation checks whether features tend to move before BTC over 1, 5, and 20 trading day windows.",
             f"Market data is currently sourced from {', '.join(sources)}.",
         ],
         disclaimer="Market overview is for research only. Not investment advice.",
