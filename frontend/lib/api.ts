@@ -42,9 +42,23 @@ export type MarketInstrument = {
   data_source: string;
 };
 
+export type IndexChartPoint = {
+  date: string;
+  close: number;
+};
+
+export type IndexChart = {
+  symbol: string;
+  name: string;
+  currency: string;
+  points: IndexChartPoint[];
+  data_source: string;
+};
+
 export type MarketsOverview = {
   generated_at: string;
   instruments: MarketInstrument[];
+  index_charts: IndexChart[];
   summary: string[];
   disclaimer: string;
 };
@@ -108,6 +122,44 @@ export const fallbackMarkets: MarketsOverview = {
     { symbol: "^GSPC", name: "S&P 500", category: "Indices", market: "United States", currency: "USD", price: 5200, change_pct: 0, data_source: "Local fallback" },
     { symbol: "^KS11", name: "KOSPI", category: "Indices", market: "South Korea", currency: "KRW", price: 2700, change_pct: 0, data_source: "Local fallback" },
     { symbol: "XAUUSD=X", name: "Gold Spot", category: "Commodities", market: "Global", currency: "USD", price: 2300, change_pct: 0, data_source: "Local fallback" },
+  ],
+  index_charts: [
+    { symbol: "^GSPC", name: "S&P 500", currency: "USD", data_source: "Local fallback", points: [
+      { date: "Fallback 1", close: 5000 },
+      { date: "Fallback 2", close: 5070 },
+      { date: "Fallback 3", close: 5120 },
+      { date: "Fallback 4", close: 5090 },
+      { date: "Fallback 5", close: 5180 },
+      { date: "Fallback 6", close: 5240 },
+      { date: "Fallback 7", close: 5310 },
+    ] },
+    { symbol: "^IXIC", name: "Nasdaq Composite", currency: "USD", data_source: "Local fallback", points: [
+      { date: "Fallback 1", close: 15800 },
+      { date: "Fallback 2", close: 16050 },
+      { date: "Fallback 3", close: 16240 },
+      { date: "Fallback 4", close: 16120 },
+      { date: "Fallback 5", close: 16480 },
+      { date: "Fallback 6", close: 16810 },
+      { date: "Fallback 7", close: 17050 },
+    ] },
+    { symbol: "^KS11", name: "KOSPI", currency: "KRW", data_source: "Local fallback", points: [
+      { date: "Fallback 1", close: 2550 },
+      { date: "Fallback 2", close: 2585 },
+      { date: "Fallback 3", close: 2610 },
+      { date: "Fallback 4", close: 2590 },
+      { date: "Fallback 5", close: 2640 },
+      { date: "Fallback 6", close: 2675 },
+      { date: "Fallback 7", close: 2700 },
+    ] },
+    { symbol: "^N225", name: "Nikkei 225", currency: "JPY", data_source: "Local fallback", points: [
+      { date: "Fallback 1", close: 37500 },
+      { date: "Fallback 2", close: 38100 },
+      { date: "Fallback 3", close: 38600 },
+      { date: "Fallback 4", close: 38250 },
+      { date: "Fallback 5", close: 39000 },
+      { date: "Fallback 6", close: 39700 },
+      { date: "Fallback 7", close: 40200 },
+    ] },
   ],
   summary: [
     "Global market overview is waiting for backend data.",

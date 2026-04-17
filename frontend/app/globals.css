@@ -168,6 +168,67 @@ h1 {
   border-radius: 8px;
 }
 
+.index-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.index-chart {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.index-chart-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.index-chart-header h3 {
+  margin-bottom: 4px;
+}
+
+.index-chart-header span,
+.chart-range {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.line-plot {
+  width: 100%;
+  height: 110px;
+}
+
+.line-plot line {
+  stroke: var(--line);
+  stroke-width: 2;
+}
+
+.line-plot path {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.line-positive {
+  stroke: var(--accent);
+}
+
+.line-negative {
+  stroke: var(--warning);
+}
+
+.chart-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .summary-bar-row {
   display: grid;
   grid-template-columns: minmax(110px, 160px) minmax(120px, 1fr) 72px;
@@ -299,7 +360,8 @@ h1 {
   }
 
   .metric-row,
-  .scenario-grid {
+  .scenario-grid,
+  .index-chart-grid {
     grid-template-columns: 1fr;
   }
 

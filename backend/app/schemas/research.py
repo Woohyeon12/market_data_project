@@ -21,6 +21,19 @@ class MarketInstrument(BaseModel):
     data_source: str = "Local fallback"
 
 
+class IndexChartPoint(BaseModel):
+    date: str
+    close: float
+
+
+class IndexChart(BaseModel):
+    symbol: str
+    name: str
+    currency: str
+    points: list[IndexChartPoint]
+    data_source: str = "Local fallback"
+
+
 class NewsItem(BaseModel):
     title: str
     source: str
@@ -49,5 +62,6 @@ class ResearchReport(BaseModel):
 class MarketsOverview(BaseModel):
     generated_at: datetime
     instruments: list[MarketInstrument]
+    index_charts: list[IndexChart]
     summary: list[str]
     disclaimer: str

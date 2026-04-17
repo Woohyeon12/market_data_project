@@ -1,9 +1,10 @@
 import json
+from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from app.schemas.research import MarketInstrument
+from app.schemas.research import IndexChart, IndexChartPoint, MarketInstrument
 
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 
@@ -23,6 +24,13 @@ TRACKED_INSTRUMENTS = [
     ("^KS11", "KOSPI", "Indices", "South Korea", "KRW", 2700.0, 0.0),
     ("^N225", "Nikkei 225", "Indices", "Japan", "JPY", 39000.0, 0.0),
     ("XAUUSD=X", "Gold Spot", "Commodities", "Global", "USD", 2300.0, 0.0),
+]
+
+TRACKED_INDEX_CHARTS = [
+    ("^GSPC", "S&P 500", "USD", [5000, 5070, 5120, 5090, 5180, 5240, 5310, 5275]),
+    ("^IXIC", "Nasdaq Composite", "USD", [15800, 16050, 16240, 16120, 16480, 16810, 17050, 16920]),
+    ("^KS11", "KOSPI", "KRW", [2550, 2585, 2610, 2590, 2640, 2675, 2700, 2688]),
+    ("^N225", "Nikkei 225", "JPY", [37500, 38100, 38600, 38250, 39000, 39700, 40200, 39900]),
 ]
 
 
@@ -101,8 +109,84 @@ def _fetch_yahoo_instrument(
         )
 
 
+def _fallback_index_chart(
+    symbol: str,
+    name: str,
+    currency: str,
+    closes: list[float],
+) -> IndexChart:
+    points = [
+        IndexChartPoint(date=f"Fallback {index + 1}", close=close)
+        for index, close in enumerate(closes)
+    ]
+
+    return IndexChart(
+        symbol=symbol,
+        name=name,
+        currency=currency,
+        points=points,
+        data_source="Local fallback",
+    )
+
+
+def _fetch_yahoo_index_chart(
+    symbol: str,
+    name: str,
+    currency: str,
+    fallback_closes: list[float],
+) -> IndexChart:
+    request = Request(
+        f"{YAHOO_CHART_URL}/{quote(symbol, safe='')}?range=1mo&interval=1d",
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "btc-research-ai/0.1",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=8.0) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        result = payload["chart"]["result"][0]
+        timestamps = result["timestamp"]
+        quote_data = result["indicators"]["quote"][0]
+        closes = quote_data["close"]
+        points = []
+
+        for timestamp, close in zip(timestamps, closes):
+            if close is None:
+                continue
+
+            points.append(
+                IndexChartPoint(
+                    date=datetime.fromtimestamp(timestamp, tz=timezone.utc).date().isoformat(),
+                    close=float(close),
+                )
+            )
+
+        if len(points) < 2:
+            return _fallback_index_chart(symbol, name, currency, fallback_closes)
+
+        return IndexChart(
+            symbol=symbol,
+            name=name,
+            currency=result["meta"].get("currency") or currency,
+            points=points,
+            data_source="Yahoo Finance",
+        )
+    except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError):
+        return _fallback_index_chart(symbol, name, currency, fallback_closes)
+
+
 def get_global_markets() -> list[MarketInstrument]:
     return [
         _fetch_yahoo_instrument(*instrument)
         for instrument in TRACKED_INSTRUMENTS
+    ]
+
+
+def get_index_charts() -> list[IndexChart]:
+    return [
+        _fetch_yahoo_index_chart(*chart)
+        for chart in TRACKED_INDEX_CHARTS
     ]

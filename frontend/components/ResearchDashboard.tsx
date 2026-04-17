@@ -6,6 +6,7 @@ import {
   fallbackReport,
   fetchBtcResearch,
   fetchMarketsOverview,
+  type IndexChart,
   type MarketInstrument,
   type MarketsOverview,
   type ResearchReport,
@@ -57,6 +58,34 @@ function barWidth(changePct: number, maxAbsChange: number) {
   }
 
   return `${Math.min(Math.abs(changePct) / maxAbsChange, 1) * 100}%`;
+}
+
+function chartPath(chart: IndexChart) {
+  if (chart.points.length === 0) {
+    return "";
+  }
+
+  const width = 280;
+  const height = 96;
+  const closes = chart.points.map((point) => point.close);
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = max - min || 1;
+
+  return chart.points
+    .map((point, index) => {
+      const x = chart.points.length === 1 ? width : (index / (chart.points.length - 1)) * width;
+      const y = height - ((point.close - min) / range) * height;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function chartChangePct(chart: IndexChart) {
+  const first = chart.points[0]?.close ?? 0;
+  const last = chart.points[chart.points.length - 1]?.close ?? first;
+
+  return first ? ((last - first) / first) * 100 : 0;
 }
 
 export function ResearchDashboard() {
@@ -164,6 +193,43 @@ export function ResearchDashboard() {
             <p className="source-label">
               Updated {new Date(markets.generated_at).toLocaleString()}
             </p>
+            <div className="index-chart-grid" aria-label="Major index price plots">
+              {markets.index_charts.map((chart) => {
+                const changePct = chartChangePct(chart);
+                const firstPoint = chart.points[0];
+                const lastPoint = chart.points[chart.points.length - 1];
+
+                return (
+                  <article className="index-chart" key={chart.symbol}>
+                    <div className="index-chart-header">
+                      <div>
+                        <h3>{chart.name}</h3>
+                        <span>{chart.symbol} - {chart.data_source}</span>
+                      </div>
+                      <strong className={changePct >= 0 ? "change-positive" : "change-negative"}>
+                        {changePct.toFixed(2)}%
+                      </strong>
+                    </div>
+                    <svg
+                      className="line-plot"
+                      viewBox="0 0 280 96"
+                      role="img"
+                      aria-label={`${chart.name} one month price plot`}
+                    >
+                      <line x1="0" y1="92" x2="280" y2="92" />
+                      <path
+                        className={changePct >= 0 ? "line-positive" : "line-negative"}
+                        d={chartPath(chart)}
+                      />
+                    </svg>
+                    <div className="chart-range">
+                      <span>{firstPoint?.date ?? "Start"}</span>
+                      <span>{lastPoint?.date ?? "Latest"}</span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
             <div className="market-summary-bars" aria-label="Average market moves by category">
               {marketCategories.map(([category, items]) => {
                 const changePct = averageChange(items);
