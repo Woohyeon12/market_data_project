@@ -1,5 +1,23 @@
 # Approval Queue
 
+## 2026-04-18 04:58 KST
+
+### Current Status
+
+- Done: Kaggle authentication used the token only as a process environment variable, not as a committed file.
+- Done: Kaggle GPU kernel completed and produced 10 BTC high-volume candle boosting/bagging model backtests.
+- Done: Downloaded run outputs into `backend/model_registry/kaggle_runs/btc_volume_boosting_gpu_latest`.
+- Done: Backend rebuilt and restarted so `/research/model-backtests` now returns one Kaggle run with 10 models and four split metrics for the top model.
+- Done: Frontend production server restarted on `http://localhost:3000`.
+
+### Pending Approvals
+
+- None.
+
+### User Security Action
+
+- Rotate the exposed Kaggle token in Kaggle settings before using it for long-running automation.
+
 ## 2026-04-18 04:10 KST
 
 ### Current Status

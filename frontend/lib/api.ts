@@ -155,12 +155,74 @@ export type ModelBacktestResult = {
   equity_curve: ModelEquityPoint[];
 };
 
+export type ModelFeatureImportance = {
+  feature: string;
+  importance: number;
+};
+
+export type ModelSplitMetric = {
+  model_name: string;
+  split: number;
+  start: string;
+  end: string;
+  sharpe_ratio: number;
+  win_rate_pct: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  exposure_pct: number;
+  trades: number;
+  observations: number;
+  active_observations: number;
+};
+
+export type ModelSplitCorrelation = {
+  model_name: string;
+  split: number;
+  feature: string;
+  correlation: number;
+};
+
+export type KaggleModelResult = {
+  name: string;
+  model_type: string;
+  status: string;
+  message: string;
+  sharpe_ratio: number;
+  win_rate_pct: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  exposure_pct: number;
+  trades: number;
+  observations: number;
+  active_observations: number;
+  backtest_start?: string | null;
+  backtest_end?: string | null;
+  features: string[];
+  feature_importance: ModelFeatureImportance[];
+  split_metrics: ModelSplitMetric[];
+  split_correlations: ModelSplitCorrelation[];
+  equity_curve: ModelEquityPoint[];
+};
+
+export type KaggleModelRun = {
+  run_id: string;
+  generated_at: string;
+  accelerator: string;
+  high_volume_rule: string;
+  training_window: string;
+  backtest_window: string;
+  batch_size: number;
+  models_requested: number;
+  models: KaggleModelResult[];
+};
+
 export type ModelBacktestOverview = {
   generated_at: string;
   model_folder: string;
   evaluation_window: string;
   available_features: string[];
   results: ModelBacktestResult[];
+  kaggle_runs: KaggleModelRun[];
   instructions: string[];
   disclaimer: string;
 };
@@ -206,6 +268,7 @@ export const fallbackModelBacktests: ModelBacktestOverview = {
     "fundamental_target_upside",
   ],
   results: [],
+  kaggle_runs: [],
   instructions: [
     "Place enabled JSON model files in backend/model_registry.",
     "Each file should include weights or derived_variables keyed by available feature names.",

@@ -1,0 +1,13 @@
+{
+  "id": "seowoohyeon/btc-volume-boosting-gpu-backtest",
+  "title": "BTC Volume Boosting GPU Backtest",
+  "code_file": "volume_boosting_gpu.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}

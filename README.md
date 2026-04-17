@@ -77,6 +77,26 @@ For stock models, use `target: "equity_fundamental_score"` with financial statem
 
 See `backend/model_registry/README.md` for the supported feature names and JSON format. User JSON files are ignored by Git by default so private model weights are not pushed accidentally.
 
+## Kaggle GPU Volume Models
+
+The folder `kaggle/volume_boosting_gpu` contains a Kaggle notebook script for high-volume BTC candle models.
+
+- It requests a GPU in `kernel-metadata.json`.
+- It fetches about 10 years of BTC, S&P 500, Nasdaq, gold, and US Treasury yield data from Yahoo Finance.
+- It trains only on candles older than the latest two-year test window.
+- It evaluates the latest two years in four chronological splits.
+- It compares up to 10 boosting or bagging models in batches of two.
+- It writes `run_summary.json`, split metrics, correlations, feature importance, and predictions.
+
+Run from the repo root after authenticating Kaggle in the current shell:
+
+```powershell
+kaggle kernels push -p kaggle\volume_boosting_gpu
+kaggle kernels output seowoohyeon/btc-volume-boosting-gpu-backtest -p backend\model_registry\kaggle_runs --force
+```
+
+Do not commit Kaggle tokens. If a token was pasted into chat or logs, rotate it in Kaggle before relying on it for ongoing automation.
+
 ## Next Things To Add
 
 - Expand the first CoinGecko market data integration with retries, caching, and monitoring.

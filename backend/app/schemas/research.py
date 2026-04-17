@@ -132,12 +132,74 @@ class ModelBacktestResult(BaseModel):
     equity_curve: list[ModelEquityPoint] = []
 
 
+class ModelFeatureImportance(BaseModel):
+    feature: str
+    importance: float
+
+
+class ModelSplitMetric(BaseModel):
+    model_name: str
+    split: int
+    start: str
+    end: str
+    sharpe_ratio: float
+    win_rate_pct: float
+    total_return_pct: float
+    max_drawdown_pct: float
+    exposure_pct: float
+    trades: int
+    observations: int
+    active_observations: int
+
+
+class ModelSplitCorrelation(BaseModel):
+    model_name: str
+    split: int
+    feature: str
+    correlation: float
+
+
+class KaggleModelResult(BaseModel):
+    name: str
+    model_type: str
+    status: str
+    message: str
+    sharpe_ratio: float
+    win_rate_pct: float
+    total_return_pct: float
+    max_drawdown_pct: float
+    exposure_pct: float
+    trades: int
+    observations: int
+    active_observations: int
+    backtest_start: str | None = None
+    backtest_end: str | None = None
+    features: list[str] = []
+    feature_importance: list[ModelFeatureImportance] = []
+    split_metrics: list[ModelSplitMetric] = []
+    split_correlations: list[ModelSplitCorrelation] = []
+    equity_curve: list[ModelEquityPoint] = []
+
+
+class KaggleModelRun(BaseModel):
+    run_id: str
+    generated_at: str
+    accelerator: str
+    high_volume_rule: str
+    training_window: str
+    backtest_window: str
+    batch_size: int
+    models_requested: int
+    models: list[KaggleModelResult] = []
+
+
 class ModelBacktestOverview(BaseModel):
     generated_at: datetime
     model_folder: str
     evaluation_window: str
     available_features: list[str]
     results: list[ModelBacktestResult]
+    kaggle_runs: list[KaggleModelRun] = []
     instructions: list[str]
     disclaimer: str
 

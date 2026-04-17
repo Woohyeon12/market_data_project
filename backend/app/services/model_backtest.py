@@ -17,6 +17,7 @@ from app.collectors.global_markets import (
 )
 from app.schemas.research import (
     IndexChart,
+    KaggleModelRun,
     ModelBacktestOverview,
     ModelBacktestResult,
     ModelEquityPoint,
@@ -24,6 +25,7 @@ from app.schemas.research import (
 
 MODEL_FOLDER = Path(os.getenv("MODEL_REGISTRY_PATH", "model_registry"))
 BACKTEST_TRADING_DAYS = 504
+KAGGLE_RUNS_FOLDER = MODEL_FOLDER / "kaggle_runs"
 
 
 def _chart_by_name(charts: list[IndexChart], name: str) -> IndexChart | None:
@@ -305,6 +307,22 @@ def _error_result(
     )
 
 
+def _load_kaggle_runs() -> list[KaggleModelRun]:
+    runs = []
+    if not KAGGLE_RUNS_FOLDER.exists():
+        return runs
+
+    for summary_path in sorted(KAGGLE_RUNS_FOLDER.glob("*/run_summary.json")):
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                runs.append(KaggleModelRun(**payload))
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+
+    return sorted(runs, key=lambda item: item.generated_at, reverse=True)
+
+
 def build_model_backtests() -> ModelBacktestOverview:
     charts = get_index_charts() + get_bond_charts()
     feature_series = _build_feature_series(charts)
@@ -335,8 +353,10 @@ def build_model_backtests() -> ModelBacktestOverview:
         evaluation_window="latest 504 trading observations, approximately two years",
         available_features=sorted([*feature_series, *FUNDAMENTAL_MODEL_FEATURES]),
         results=results,
+        kaggle_runs=_load_kaggle_runs(),
         instructions=[
             "Place JSON model files in backend/model_registry.",
+            "Place Kaggle GPU run folders under backend/model_registry/kaggle_runs or run kaggle/volume_boosting_gpu/volume_boosting_gpu.py.",
             "Use weights or derived_variables to map feature names to trained model weights.",
             "The signal from date T is evaluated against BTC return on date T+1 to reduce look-ahead bias.",
             "Use target equity_fundamental_score for boosting or bagging models that score stocks from financial statement metrics.",

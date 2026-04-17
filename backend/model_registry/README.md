@@ -88,3 +88,19 @@ For stock fundamental boosting or bagging scores, use `target: "equity_fundament
 ```
 
 For safety, user JSON model files are ignored by Git by default. Keep private weights in local files and commit only intentionally shared examples.
+
+## Kaggle GPU Run Outputs
+
+Kaggle GPU runs from `kaggle/volume_boosting_gpu` should be downloaded into this shape:
+
+```text
+backend/model_registry/kaggle_runs/
+  btc_volume_boosting_gpu_latest/
+    run_summary.json
+    split_metrics.csv
+    split_correlations.csv
+    feature_importance.csv
+    predictions.csv
+```
+
+The backend reads `run_summary.json` automatically and the Models page shows model comparison, feature importance, four-split performance, and split-level correlations.

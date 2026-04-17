@@ -451,6 +451,11 @@ function formatPercent(value: number) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function normalizedPercentWidth(value: number, maxAbsValue: number) {
+  const denominator = Math.max(Math.abs(maxAbsValue), 0.0001);
+  return `${Math.min(Math.abs(value) / denominator, 1) * 100}%`;
+}
+
 function metricDisplayValue(value: number, unit: string) {
   if (unit === "%") {
     return `${value.toFixed(1)}%`;
@@ -605,12 +610,27 @@ export function ResearchDashboard() {
     .filter((cell) => cell.value < 0)
     .sort((first, second) => first.value - second.value)
     .slice(0, 3);
+  const latestKaggleRun = modelBacktests.kaggle_runs[0];
+  const kaggleModelCount = modelBacktests.kaggle_runs.reduce((total, run) => {
+    return total + run.models.length;
+  }, 0);
+  const topKaggleModel = latestKaggleRun?.models[0];
+  const topKaggleImportance = topKaggleModel?.feature_importance.slice(0, 8) ?? [];
+  const topKaggleSplitCorrelations = topKaggleModel?.split_correlations.slice(0, 20) ?? [];
+  const maxKaggleImportance = Math.max(
+    0.01,
+    ...topKaggleImportance.map((item) => item.importance),
+  );
+  const maxKaggleCorrelation = Math.max(
+    0.01,
+    ...topKaggleSplitCorrelations.map((item) => Math.abs(item.correlation)),
+  );
   const pageStats: Record<DashboardPage, string> = {
     overview: `${report.scenarios.length} scenarios`,
     markets: `${chartSet.length} charts`,
     fundamentals: `${equityFundamentals.length} stocks`,
     signals: `${markets.correlations.assets.length} features`,
-    models: `${modelBacktests.results.length} models`,
+    models: `${modelBacktests.results.length + kaggleModelCount} models`,
     news: `${filteredNews.length} news`,
   };
   const activePageIndex = DASHBOARD_PAGES.findIndex((page) => page.value === activePage);
@@ -1216,6 +1236,153 @@ export function ResearchDashboard() {
                 })}
               </div>
             )}
+            <div className="kaggle-run-panel">
+              <div className="kaggle-run-header">
+                <div>
+                  <h3>Kaggle GPU Volume Models</h3>
+                  <p>
+                    High-volume BTC candle regime models trained before the latest two-year backtest window.
+                  </p>
+                </div>
+                {latestKaggleRun ? (
+                  <strong className="status-ok">{latestKaggleRun.accelerator}</strong>
+                ) : (
+                  <strong className="status-muted">waiting</strong>
+                )}
+              </div>
+              {latestKaggleRun ? (
+                <>
+                  <div className="kaggle-run-meta">
+                    <span>Run {latestKaggleRun.run_id}</span>
+                    <span>{latestKaggleRun.high_volume_rule}</span>
+                    <span>Train {latestKaggleRun.training_window}</span>
+                    <span>Backtest {latestKaggleRun.backtest_window}</span>
+                    <span>Batch size {latestKaggleRun.batch_size}</span>
+                  </div>
+                  <div className="model-grid kaggle-model-grid" aria-label="Kaggle GPU model comparison">
+                    {latestKaggleRun.models.slice(0, 10).map((model) => {
+                      const curve = modelCurveGeometry(model.equity_curve);
+                      const healthy = model.status === "ok";
+
+                      return (
+                        <article className="model-card" key={`${latestKaggleRun.run_id}-${model.name}`}>
+                          <div className="model-card-header">
+                            <div>
+                              <h3>{model.name}</h3>
+                              <span>{model.model_type}</span>
+                            </div>
+                            <strong className={healthy ? "status-ok" : "status-muted"}>
+                              {model.status}
+                            </strong>
+                          </div>
+                          <div className="model-metrics">
+                            <div>
+                              <span>Sharpe</span>
+                              <strong>{model.sharpe_ratio.toFixed(2)}</strong>
+                            </div>
+                            <div>
+                              <span>Win rate</span>
+                              <strong>{model.win_rate_pct.toFixed(1)}%</strong>
+                            </div>
+                            <div>
+                              <span>Total</span>
+                              <strong className={model.total_return_pct >= 0 ? "change-positive" : "change-negative"}>
+                                {formatPercent(model.total_return_pct)}
+                              </strong>
+                            </div>
+                            <div>
+                              <span>Exposure</span>
+                              <strong>{model.exposure_pct.toFixed(1)}%</strong>
+                            </div>
+                          </div>
+                          {model.equity_curve.length ? (
+                            <svg
+                              className="model-equity-curve"
+                              viewBox={`0 0 ${curve.width} ${curve.height}`}
+                              role="img"
+                              aria-label={`${model.name} Kaggle equity curve`}
+                            >
+                              <line x1="0" y1={curve.baseline} x2={curve.width} y2={curve.baseline} />
+                              <path d={curve.path} />
+                            </svg>
+                          ) : null}
+                          <div className="model-meta">
+                            <span>{model.active_observations.toLocaleString()} active candles</span>
+                            <span>{model.observations.toLocaleString()} observations</span>
+                            <span>{model.trades.toLocaleString()} position changes</span>
+                            <span className="change-negative">MDD {model.max_drawdown_pct.toFixed(2)}%</span>
+                          </div>
+                          <p>{model.message}</p>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  {topKaggleModel ? (
+                    <div className="kaggle-analysis-grid" aria-label="Top Kaggle model diagnostics">
+                      <div className="kaggle-analysis-block">
+                        <h3>Top Model Drivers</h3>
+                        <p>{topKaggleModel.name} feature importance</p>
+                        <div className="importance-bars">
+                          {topKaggleImportance.map((item) => (
+                            <div className="importance-row" key={`${topKaggleModel.name}-${item.feature}`}>
+                              <span>{item.feature}</span>
+                              <div>
+                                <i style={{ width: normalizedPercentWidth(item.importance, maxKaggleImportance) }} />
+                              </div>
+                              <strong>{(item.importance * 100).toFixed(1)}%</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="kaggle-analysis-block">
+                        <h3>Recent 2Y Four Splits</h3>
+                        <div className="split-grid">
+                          {topKaggleModel.split_metrics.map((split) => (
+                            <article key={`${topKaggleModel.name}-split-${split.split}`}>
+                              <span>Split {split.split}</span>
+                              <strong>{split.sharpe_ratio.toFixed(2)} Sharpe</strong>
+                              <em>{split.start} to {split.end}</em>
+                              <div>
+                                <span>{split.win_rate_pct.toFixed(1)}% win</span>
+                                <span>{formatPercent(split.total_return_pct)}</span>
+                                <span>{split.active_observations} active</span>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="kaggle-analysis-block kaggle-correlation-block">
+                        <h3>Split Feature Correlations</h3>
+                        <p>Top drivers versus next-day BTC return inside each recent split.</p>
+                        <div className="correlation-bars">
+                          {topKaggleSplitCorrelations.map((item) => (
+                            <div className="correlation-bar-row" key={`${item.model_name}-${item.split}-${item.feature}`}>
+                              <span>S{item.split} {item.feature}</span>
+                              <div>
+                                <i
+                                  className={item.correlation >= 0 ? "bar-positive" : "bar-negative"}
+                                  style={{ width: normalizedPercentWidth(item.correlation, maxKaggleCorrelation) }}
+                                />
+                              </div>
+                              <strong className={item.correlation >= 0 ? "change-positive" : "change-negative"}>
+                                {item.correlation.toFixed(2)}
+                              </strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="empty-state">
+                  <strong>Kaggle run output has not been imported yet.</strong>
+                  <p>
+                    Push the GPU kernel, download its output folder, and place run_summary.json under backend/model_registry/kaggle_runs.
+                  </p>
+                </div>
+              )}
+            </div>
             <div className="model-instructions">
               {modelBacktests.instructions.map((instruction) => (
                 <span key={instruction}>{instruction}</span>
