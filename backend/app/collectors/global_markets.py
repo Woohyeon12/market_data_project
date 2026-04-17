@@ -357,6 +357,21 @@ def _correlation(first: list[float], second: list[float]) -> float:
     return covariance / (first_variance ** 0.5 * second_variance ** 0.5)
 
 
+def _feature_label(chart_name: str, suffix: str) -> str:
+    short_names = {
+        "Bitcoin": "BTC",
+        "S&P 500": "S&P 500",
+        "Nasdaq Composite": "Nasdaq",
+        "KOSPI": "KOSPI",
+        "Nikkei 225": "Nikkei",
+        "Gold Futures": "Gold",
+        "US 10Y Treasury Yield": "US 10Y",
+        "US 30Y Treasury Yield": "US 30Y",
+        "US 5Y Treasury Yield": "US 5Y",
+    }
+    return f"{short_names.get(chart_name, chart_name)} {suffix}"
+
+
 def build_correlation_analysis(
     charts: list[IndexChart],
     lookback_days: int = 252,
@@ -372,41 +387,44 @@ def build_correlation_analysis(
             data_source="SQLite OHLC engineered features",
         )
 
-    target_name = "BTC daily return"
-    target = _daily_returns(bitcoin.points, lookback_days)
-    feature_series = {}
+    target_name = "BTC return"
+    feature_series = {
+        target_name: _daily_returns(bitcoin.points, lookback_days),
+    }
 
     for chart in charts:
         if chart.name == "Bitcoin" or len(chart.points) <= 30:
             continue
 
         if "Yield" in chart.name:
-            feature_series[f"{chart.name} daily bp change"] = _level_changes(chart.points, lookback_days, multiplier=100)
+            feature_series[_feature_label(chart.name, "bp chg")] = _level_changes(chart.points, lookback_days, multiplier=100)
         else:
-            feature_series[f"{chart.name} daily return"] = _daily_returns(chart.points, lookback_days)
+            feature_series[_feature_label(chart.name, "return")] = _daily_returns(chart.points, lookback_days)
 
     feature_series["BTC RSI(14)"] = _rsi_feature(bitcoin.points, lookback_days)
-    feature_series["BTC 20D realized volatility"] = _rolling_volatility(bitcoin.points, lookback_days)
+    feature_series["BTC 20D vol"] = _rolling_volatility(bitcoin.points, lookback_days)
     feature_series["BTC 60D drawdown"] = _drawdown_feature(bitcoin.points, lookback_days)
 
     matrix = []
-    for feature_name, series in feature_series.items():
-        common_dates = sorted(set(target) & set(series))
-        target_values = [target[date] for date in common_dates]
-        feature_values = [series[date] for date in common_dates]
-        matrix.append(
-            CorrelationCell(
-                x=feature_name,
-                y=target_name,
-                value=round(_correlation(feature_values, target_values), 2),
+    feature_names = list(feature_series)
+    for y_name in feature_names:
+        for x_name in feature_names:
+            common_dates = sorted(set(feature_series[x_name]) & set(feature_series[y_name]))
+            x_values = [feature_series[x_name][date] for date in common_dates]
+            y_values = [feature_series[y_name][date] for date in common_dates]
+            matrix.append(
+                CorrelationCell(
+                    x=x_name,
+                    y=y_name,
+                    value=round(_correlation(x_values, y_values), 2),
+                )
             )
-        )
 
-    matrix = sorted(matrix, key=lambda cell: abs(cell.value), reverse=True)
-    strongest_positive = max(matrix, key=lambda cell: cell.value, default=None)
-    strongest_negative = min(matrix, key=lambda cell: cell.value, default=None)
+    btc_pairs = [cell for cell in matrix if cell.y == target_name and cell.x != target_name]
+    strongest_positive = max(btc_pairs, key=lambda cell: cell.value, default=None)
+    strongest_negative = min(btc_pairs, key=lambda cell: cell.value, default=None)
     insights = [
-        f"Feature correlation targets BTC daily return over the latest {lookback_days} trading days.",
+        f"Feature heatmap compares engineered variables over the latest {lookback_days} trading days.",
         "Rate features use daily yield changes in basis points; market features use daily percentage returns.",
     ]
     if strongest_positive:
@@ -416,8 +434,8 @@ def build_correlation_analysis(
 
     return CorrelationAnalysis(
         lookback_days=lookback_days,
-        assets=[cell.x for cell in matrix],
+        assets=feature_names,
         matrix=matrix,
         insights=insights,
-        data_source="SQLite OHLC engineered features",
+        data_source="SQLite OHLC engineered feature heatmap",
     )

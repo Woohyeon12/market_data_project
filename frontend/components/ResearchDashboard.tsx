@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   fallbackMarkets,
   fallbackReport,
@@ -344,10 +344,6 @@ function correlationTextColor(value: number) {
   return Math.abs(value) > 0.55 ? "#ffffff" : "var(--foreground)";
 }
 
-function correlationBarWidth(value: number) {
-  return `${Math.max(4, Math.abs(value) * 50)}%`;
-}
-
 export function ResearchDashboard() {
   const [report, setReport] = useState<ResearchReport>(fallbackReport);
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
@@ -650,30 +646,54 @@ export function ResearchDashboard() {
           </div>
 
           <div className="panel">
-            <h2>BTC Feature Correlation</h2>
+            <h2>Feature Correlation Heatmap</h2>
             <p className="source-label">
-              Target: BTC daily return - {markets.correlations.lookback_days} trading days - {markets.correlations.data_source}
+              {markets.correlations.lookback_days} trading days - {markets.correlations.data_source}
             </p>
-            <div className="feature-correlation-list" aria-label="BTC feature correlation bars">
-              {markets.correlations.matrix.map((cell) => (
-                <div className="feature-correlation-row" key={cell.x}>
-                  <span>{cell.x}</span>
-                  <div className="feature-correlation-track">
-                    <div
-                      className={cell.value >= 0 ? "feature-correlation-positive" : "feature-correlation-negative"}
-                      style={{ width: correlationBarWidth(cell.value) }}
-                    />
+            <div className="correlation-scroll">
+              <div
+                className="correlation-grid"
+                aria-label="Feature correlation heatmap"
+                style={{
+                  gridTemplateColumns: `minmax(96px, 1.2fr) repeat(${markets.correlations.assets.length}, minmax(58px, 1fr))`,
+                }}
+              >
+                <div className="correlation-corner">Feature</div>
+                {markets.correlations.assets.map((asset) => (
+                  <div className="correlation-axis correlation-axis-top" key={`x-${asset}`}>
+                    {asset}
                   </div>
-                  <strong
-                    style={{
-                      background: correlationColor(cell.value),
-                      color: correlationTextColor(cell.value),
-                    }}
-                  >
-                    {cell.value.toFixed(2)}
-                  </strong>
-                </div>
-              ))}
+                ))}
+                {markets.correlations.assets.map((yAsset) => (
+                  <Fragment key={`row-${yAsset}`}>
+                    <div className="correlation-axis" key={`y-${yAsset}`}>{yAsset}</div>
+                    {markets.correlations.assets.map((xAsset) => {
+                      const value = markets.correlations.matrix.find((cell) => {
+                        return cell.x === xAsset && cell.y === yAsset;
+                      })?.value ?? 0;
+
+                      return (
+                        <div
+                          className="correlation-cell"
+                          key={`${xAsset}-${yAsset}`}
+                          style={{
+                            background: correlationColor(value),
+                            color: correlationTextColor(value),
+                          }}
+                          title={`${xAsset} x ${yAsset}: ${value.toFixed(2)}`}
+                        >
+                          {value.toFixed(2)}
+                        </div>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+            <div className="correlation-legend" aria-label="Correlation color legend">
+              <span>Negative</span>
+              <div />
+              <span>Positive</span>
             </div>
             <ul className="correlation-insights">
               {markets.correlations.insights.map((insight) => (

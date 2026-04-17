@@ -192,59 +192,64 @@ h1 {
   gap: 16px;
 }
 
-.feature-correlation-list {
-  display: grid;
-  gap: 10px;
+.correlation-scroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
 }
 
-.feature-correlation-row {
+.correlation-grid {
   display: grid;
-  grid-template-columns: minmax(170px, 1.2fr) minmax(120px, 1fr) 58px;
-  gap: 10px;
-  align-items: center;
-  padding: 10px;
-  background: #fbfcfd;
-  border: 1px solid var(--line);
+  gap: 6px;
+  min-width: 760px;
+}
+
+.correlation-corner,
+.correlation-axis,
+.correlation-cell {
+  min-height: 42px;
+  padding: 8px 9px;
   border-radius: 8px;
+  font-size: 11px;
 }
 
-.feature-correlation-row span {
+.correlation-corner,
+.correlation-axis {
+  display: flex;
+  align-items: center;
   color: var(--muted);
-  font-size: 13px;
+  background: var(--ink-soft);
   font-weight: 700;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
-.feature-correlation-row strong {
-  padding: 7px 8px;
-  border-radius: 8px;
-  font-size: 13px;
+.correlation-axis-top {
+  align-items: flex-end;
+  min-height: 58px;
+}
+
+.correlation-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.55);
   font-weight: 700;
-  text-align: center;
 }
 
-.feature-correlation-track {
-  height: 10px;
-  overflow: hidden;
-  background: #e0e6ec;
+.correlation-legend {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 220px) auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.correlation-legend div {
+  height: 8px;
+  background: linear-gradient(90deg, var(--warning), #eef2f3, var(--accent));
   border-radius: 6px;
-}
-
-.feature-correlation-positive,
-.feature-correlation-negative {
-  height: 100%;
-  border-radius: 6px;
-}
-
-.feature-correlation-positive {
-  margin-left: 50%;
-  background: var(--accent);
-}
-
-.feature-correlation-negative {
-  margin-left: auto;
-  margin-right: 50%;
-  background: var(--warning);
 }
 
 .correlation-insights {
@@ -683,10 +688,6 @@ h1 {
   }
 
   .summary-bar-row {
-    grid-template-columns: 1fr;
-  }
-
-  .feature-correlation-row {
     grid-template-columns: 1fr;
   }
 
