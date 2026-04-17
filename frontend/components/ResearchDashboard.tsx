@@ -546,6 +546,13 @@ type ShowcaseModel = {
   splitReturnStd: number;
   splitReturns: number[];
   features: string[];
+  featureCount?: number | null;
+  selectedThreshold?: number | null;
+  selectedShortThreshold?: number | null;
+  strategySide?: string | null;
+  validationSharpeRatio?: number | null;
+  sharpeTarget?: number | null;
+  targetMet?: boolean | null;
   equityCurve: ModelEquityPoint[];
 };
 
@@ -664,6 +671,13 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     splitReturnStd: standardDeviation(splitReturns),
     splitReturns,
     features: model.features,
+    featureCount: model.feature_count,
+    selectedThreshold: model.selected_threshold,
+    selectedShortThreshold: model.selected_short_threshold,
+    strategySide: model.strategy_side,
+    validationSharpeRatio: model.validation_sharpe_ratio,
+    sharpeTarget: model.sharpe_target,
+    targetMet: model.target_met,
     equityCurve: model.equity_curve,
   };
 }
@@ -1487,6 +1501,31 @@ export function ResearchDashboard() {
                   <div>
                     <span>Position changes</span>
                     <strong>{selectedModel.trades.toLocaleString()}</strong>
+                  </div>
+                  <div>
+                    <span>Sharpe target</span>
+                    <strong className={selectedModel.targetMet ? "change-positive" : "change-negative"}>
+                      {selectedModel.sharpeTarget ? selectedModel.sharpeTarget.toFixed(1) : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Validation Sharpe</span>
+                    <strong>{selectedModel.validationSharpeRatio !== null && selectedModel.validationSharpeRatio !== undefined ? selectedModel.validationSharpeRatio.toFixed(2) : "n/a"}</strong>
+                  </div>
+                  <div>
+                    <span>Feature count</span>
+                    <strong>{selectedModel.featureCount?.toLocaleString() ?? selectedModel.features.length.toLocaleString()}</strong>
+                  </div>
+                  <div>
+                    <span>Signal threshold</span>
+                    <strong>
+                      {selectedModel.selectedThreshold !== null && selectedModel.selectedThreshold !== undefined ? selectedModel.selectedThreshold.toFixed(4) : "n/a"}
+                      {selectedModel.selectedShortThreshold !== null && selectedModel.selectedShortThreshold !== undefined ? ` / ${selectedModel.selectedShortThreshold.toFixed(4)}` : ""}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Strategy side</span>
+                    <strong>{selectedModel.strategySide ?? "long_only"}</strong>
                   </div>
                 </div>
                 {selectedModel.equityCurve.length ? (

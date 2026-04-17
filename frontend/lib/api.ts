@@ -198,6 +198,15 @@ export type KaggleModelResult = {
   backtest_start?: string | null;
   backtest_end?: string | null;
   features: string[];
+  feature_engineering: string[];
+  feature_count?: number | null;
+  interaction_source_count?: number | null;
+  selected_threshold?: number | null;
+  selected_short_threshold?: number | null;
+  strategy_side?: string | null;
+  validation_sharpe_ratio?: number | null;
+  sharpe_target?: number | null;
+  target_met?: boolean | null;
   feature_importance: ModelFeatureImportance[];
   split_metrics: ModelSplitMetric[];
   split_correlations: ModelSplitCorrelation[];
@@ -210,9 +219,15 @@ export type KaggleModelRun = {
   accelerator: string;
   high_volume_rule: string;
   training_window: string;
+  validation_window?: string | null;
   backtest_window: string;
   batch_size: number;
   models_requested: number;
+  sharpe_target?: number | null;
+  feature_engineering?: string | null;
+  base_feature_count?: number | null;
+  interaction_source_count?: number | null;
+  final_feature_count?: number | null;
   models: KaggleModelResult[];
 };
 

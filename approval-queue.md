@@ -4,6 +4,7 @@
 
 ### Current Status
 
+- Done: 2026-04-18 08:20 KST engineered Kaggle model run completed with only LightGBM, XGBoost, and ExtraTrees. The run used 2,325 normalized features after second-order arithmetic interactions. Sharpe 2.0 was not achieved on the full latest two-year window; best full-window Sharpe was 0.269, while one split reached 2.271.
 - Done: 2026-04-18 05:17 KST Models page now has a marketplace-style carousel, selected-model score hero, stability score, since-model-start return, split consistency, comparison table, and Docker frontend rebuild.
 - Done: Kaggle authentication used the token only as a process environment variable, not as a committed file.
 - Done: Kaggle GPU kernel completed and produced 10 BTC high-volume candle boosting/bagging model backtests.

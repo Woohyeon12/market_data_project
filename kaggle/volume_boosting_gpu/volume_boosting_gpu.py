@@ -21,10 +21,14 @@ SYMBOLS = {
     "us30y": "^TYX",
     "us5y": "^FVX",
 }
+
 TRAIN_END_OFFSET = 504
+VALIDATION_OFFSET = 252
 HIGH_VOLUME_QUANTILE = 0.70
-BATCH_SIZE = 2
-MAX_MODELS = 10
+INTERACTION_FEATURE_LIMIT = 34
+SHARPE_TARGET = 2.0
+MIN_VALIDATION_TRADES = 18
+EPSILON = 1e-6
 
 
 def fetch_yahoo_chart(symbol: str) -> pd.DataFrame:
@@ -47,6 +51,10 @@ def fetch_yahoo_chart(symbol: str) -> pd.DataFrame:
     return frame.sort_values("date").reset_index(drop=True)
 
 
+def pct_change(series: pd.Series, periods: int = 1) -> pd.Series:
+    return series.pct_change(periods) * 100
+
+
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0).rolling(period).mean()
@@ -58,6 +66,106 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
 def drawdown(series: pd.Series, window: int = 60) -> pd.Series:
     rolling_high = series.rolling(window).max()
     return (series - rolling_high) / rolling_high * 100
+
+
+def rolling_position(series: pd.Series, window: int) -> pd.Series:
+    low = series.rolling(window).min()
+    high = series.rolling(window).max()
+    return (series - low) / (high - low).replace(0, np.nan)
+
+
+def add_market_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    close = data["btc_close"]
+    high = data["btc_high"]
+    low = data["btc_low"]
+    open_ = data["btc_open"]
+    volume = data["btc_volume"]
+    features: list[str] = []
+
+    def add(name: str, value: pd.Series) -> None:
+        data[name] = value.replace([np.inf, -np.inf], np.nan)
+        features.append(name)
+
+    add("btc_return_1d", pct_change(close, 1))
+    add("btc_return_3d", pct_change(close, 3))
+    add("btc_return_5d", pct_change(close, 5))
+    add("btc_return_7d", pct_change(close, 7))
+    add("btc_return_14d", pct_change(close, 14))
+    add("btc_return_30d", pct_change(close, 30))
+    add("btc_return_lag_7", pct_change(close, 1).shift(7))
+    add("btc_return_lag_30", pct_change(close, 1).shift(30))
+
+    candle_range = (high - low).replace(0, np.nan)
+    add("btc_candle_range_pct", candle_range / close * 100)
+    add("btc_candle_body_pct", (close - open_) / open_.replace(0, np.nan) * 100)
+    add("btc_candle_body_abs_pct", (close - open_).abs() / open_.replace(0, np.nan) * 100)
+    add("btc_upper_wick_pct", (high - np.maximum(open_, close)) / close * 100)
+    add("btc_lower_wick_pct", (np.minimum(open_, close) - low) / close * 100)
+    add("btc_close_location", (close - low) / candle_range)
+    add("btc_green_candle_flag", (close > open_).astype(float))
+
+    log_volume = np.log1p(volume)
+    add("btc_log_volume", log_volume)
+    add("btc_volume_diff_1d", volume.diff())
+    add("btc_volume_diff_7d", volume.diff(7))
+    add("btc_volume_pct_1d", pct_change(volume, 1))
+    add("btc_volume_pct_7d", pct_change(volume, 7))
+    for window in [7, 20, 30, 60]:
+        add(f"btc_volume_ratio_{window}d", volume / volume.rolling(window).mean())
+        add(f"btc_volume_z_{window}d", (volume - volume.rolling(window).mean()) / volume.rolling(window).std())
+
+    for window in [7, 14, 20, 30, 60]:
+        add(f"btc_rolling_mean_distance_{window}d", (close / close.rolling(window).mean() - 1) * 100)
+        add(f"btc_rolling_volatility_{window}d", pct_change(close, 1).rolling(window).std())
+        add(f"btc_rolling_position_{window}d", rolling_position(close, window))
+
+    for window in [30, 60, 120]:
+        add(f"btc_drawdown_{window}d", drawdown(close, window))
+
+    add("btc_rsi_7", rsi(close, 7))
+    add("btc_rsi_14", rsi(close, 14))
+    add("btc_rsi_30", rsi(close, 30))
+
+    sma7 = close.rolling(7).mean()
+    sma20 = close.rolling(20).mean()
+    sma30 = close.rolling(30).mean()
+    sma50 = close.rolling(50).mean()
+    sma100 = close.rolling(100).mean()
+    sma200 = close.rolling(200).mean()
+    add("btc_trend_above_sma20", (close > sma20).astype(float))
+    add("btc_trend_above_sma50", (close > sma50).astype(float))
+    add("btc_trend_sma7_above_sma30", (sma7 > sma30).astype(float))
+    add("btc_trend_sma20_above_sma50", (sma20 > sma50).astype(float))
+    add("btc_trend_sma50_above_sma200", (sma50 > sma200).astype(float))
+    add("btc_trend_strength_20_50", (sma20 / sma50 - 1) * 100)
+    add("btc_trend_strength_50_200", (sma50 / sma200 - 1) * 100)
+    add("btc_golden_cross_20_50", ((sma20 > sma50) & (sma20.shift(1) <= sma50.shift(1))).astype(float))
+    add("btc_golden_cross_50_200", ((sma50 > sma200) & (sma50.shift(1) <= sma200.shift(1))).astype(float))
+    add("btc_death_cross_20_50", ((sma20 < sma50) & (sma20.shift(1) >= sma50.shift(1))).astype(float))
+
+    bb_middle = sma20
+    bb_std = close.rolling(20).std()
+    bb_upper = bb_middle + bb_std * 2
+    bb_lower = bb_middle - bb_std * 2
+    add("btc_bollinger_width_20d", (bb_upper - bb_lower) / bb_middle * 100)
+    add("btc_bollinger_percent_b_20d", (close - bb_lower) / (bb_upper - bb_lower).replace(0, np.nan))
+    add("btc_bollinger_upper_distance_20d", (close / bb_upper - 1) * 100)
+    add("btc_bollinger_lower_distance_20d", (close / bb_lower - 1) * 100)
+
+    for prefix in ["sp500", "nasdaq", "gold"]:
+        add(f"{prefix}_return_1d", pct_change(data[f"{prefix}_close"], 1))
+        add(f"{prefix}_return_7d", pct_change(data[f"{prefix}_close"], 7))
+        add(f"{prefix}_return_30d", pct_change(data[f"{prefix}_close"], 30))
+
+    for prefix in ["us10y", "us30y", "us5y"]:
+        add(f"{prefix}_bp_chg_1d", data[f"{prefix}_close"].diff() * 100)
+        add(f"{prefix}_bp_chg_7d", data[f"{prefix}_close"].diff(7) * 100)
+        add(f"{prefix}_bp_chg_30d", data[f"{prefix}_close"].diff(30) * 100)
+
+    data["high_volume_candle"] = volume >= volume.rolling(252).quantile(HIGH_VOLUME_QUANTILE)
+    data["target_return_1d"] = pct_change(close, 1).shift(-1)
+    data["target_up"] = (data["target_return_1d"] > 0).astype(int)
+    return data, features
 
 
 def build_dataset() -> tuple[pd.DataFrame, list[str]]:
@@ -77,116 +185,162 @@ def build_dataset() -> tuple[pd.DataFrame, list[str]]:
         data = data.merge(chart, on="date", how="left")
 
     data = data.sort_values("date").ffill()
-    data["target_return_1d"] = data["btc_close"].pct_change().shift(-1) * 100
-    data["target_up"] = (data["target_return_1d"] > 0).astype(int)
-    data["btc_return_1d"] = data["btc_close"].pct_change() * 100
-    data["btc_return_3d"] = data["btc_close"].pct_change(3) * 100
-    data["btc_return_5d"] = data["btc_close"].pct_change(5) * 100
-    data["btc_return_10d"] = data["btc_close"].pct_change(10) * 100
-    data["btc_range_pct"] = (data["btc_high"] - data["btc_low"]) / data["btc_close"] * 100
-    data["btc_body_pct"] = (data["btc_close"] - data["btc_open"]) / data["btc_open"] * 100
-    data["btc_rsi_14"] = rsi(data["btc_close"])
-    data["btc_volatility_20d"] = data["btc_return_1d"].rolling(20).std()
-    data["btc_drawdown_60d"] = drawdown(data["btc_close"])
-    data["btc_volume_ratio_20d"] = data["btc_volume"] / data["btc_volume"].rolling(20).mean()
-    data["btc_volume_z_60d"] = (
-        (data["btc_volume"] - data["btc_volume"].rolling(60).mean())
-        / data["btc_volume"].rolling(60).std()
+    data, base_features = add_market_features(data)
+    data = data.replace([np.inf, -np.inf], np.nan).dropna(subset=base_features + ["target_return_1d"]).reset_index(drop=True)
+    return data, base_features
+
+
+def fit_standardizer(frame: pd.DataFrame, columns: list[str]) -> tuple[pd.Series, pd.Series]:
+    means = frame[columns].mean()
+    stds = frame[columns].std().replace(0, np.nan).fillna(1.0)
+    return means, stds
+
+
+def apply_standardizer(frame: pd.DataFrame, columns: list[str], means: pd.Series, stds: pd.Series) -> pd.DataFrame:
+    normalized = (frame[columns] - means) / stds
+    return normalized.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(-8, 8)
+
+
+def select_interaction_sources(train_normalized: pd.DataFrame, target: pd.Series, columns: list[str]) -> list[str]:
+    scores = []
+    for column in columns:
+        corr = train_normalized[column].corr(target)
+        scores.append((column, abs(corr) if not np.isnan(corr) else 0.0))
+    selected = [name for name, _ in sorted(scores, key=lambda item: item[1], reverse=True)[:INTERACTION_FEATURE_LIMIT]]
+    return selected
+
+
+def safe_divide(left: pd.Series, right: pd.Series) -> pd.Series:
+    denominator = right.copy()
+    denominator = denominator.mask(denominator.abs() < 0.25, np.sign(denominator).replace(0, 1) * 0.25)
+    return (left / denominator).clip(-12, 12)
+
+
+def build_second_order_features(normalized: pd.DataFrame, source_cols: list[str]) -> pd.DataFrame:
+    interactions: dict[str, pd.Series] = {}
+    for left_index, left_name in enumerate(source_cols):
+        left = normalized[left_name]
+        for right_name in source_cols[left_index + 1:]:
+            right = normalized[right_name]
+            prefix = f"{left_name}__{right_name}"
+            interactions[f"{prefix}__mul"] = (left * right).clip(-12, 12)
+            interactions[f"{prefix}__add"] = (left + right).clip(-12, 12)
+            interactions[f"{prefix}__sub"] = (left - right).clip(-12, 12)
+            interactions[f"{prefix}__div"] = safe_divide(left, right)
+    return pd.DataFrame(interactions, index=normalized.index).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def build_model_matrices(
+    data: pd.DataFrame,
+    base_features: list[str],
+    test_start_index: int,
+) -> tuple[pd.DataFrame, list[str], list[str]]:
+    train_all = data.iloc[:test_start_index].copy()
+    base_means, base_stds = fit_standardizer(train_all, base_features)
+    base_normalized = apply_standardizer(data, base_features, base_means, base_stds)
+    base_normalized.columns = [f"z_{column}" for column in base_normalized.columns]
+    normalized_base_features = list(base_normalized.columns)
+
+    train_normalized = base_normalized.iloc[:test_start_index].copy()
+    interaction_sources = select_interaction_sources(
+        train_normalized,
+        train_all["target_return_1d"],
+        normalized_base_features,
     )
-    data["high_volume_candle"] = data["btc_volume"] >= data["btc_volume"].rolling(252).quantile(HIGH_VOLUME_QUANTILE)
+    raw_interactions = build_second_order_features(base_normalized, interaction_sources)
+    interaction_means, interaction_stds = fit_standardizer(raw_interactions.iloc[:test_start_index], list(raw_interactions.columns))
+    normalized_interactions = apply_standardizer(raw_interactions, list(raw_interactions.columns), interaction_means, interaction_stds)
+    normalized_interactions.columns = [f"z2_{column}" for column in normalized_interactions.columns]
 
-    for prefix in ["sp500", "nasdaq", "gold"]:
-        data[f"{prefix}_return_1d"] = data[f"{prefix}_close"].pct_change() * 100
-        data[f"{prefix}_return_5d"] = data[f"{prefix}_close"].pct_change(5) * 100
-
-    for prefix in ["us10y", "us30y", "us5y"]:
-        data[f"{prefix}_bp_chg"] = data[f"{prefix}_close"].diff() * 100
-
-    feature_cols = [
-        "btc_return_1d",
-        "btc_return_3d",
-        "btc_return_5d",
-        "btc_return_10d",
-        "btc_range_pct",
-        "btc_body_pct",
-        "btc_rsi_14",
-        "btc_volatility_20d",
-        "btc_drawdown_60d",
-        "btc_volume_ratio_20d",
-        "btc_volume_z_60d",
-        "sp500_return_1d",
-        "sp500_return_5d",
-        "nasdaq_return_1d",
-        "nasdaq_return_5d",
-        "gold_return_1d",
-        "gold_return_5d",
-        "us10y_bp_chg",
-        "us30y_bp_chg",
-        "us5y_bp_chg",
-    ]
-    data = data.dropna(subset=feature_cols + ["target_return_1d"]).reset_index(drop=True)
-    return data, feature_cols
+    features = pd.concat([base_normalized, normalized_interactions], axis=1).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    return features, list(features.columns), interaction_sources
 
 
 def model_specs():
     specs = []
-    from sklearn.ensemble import (
-        AdaBoostClassifier,
-        BaggingClassifier,
-        ExtraTreesClassifier,
-        GradientBoostingClassifier,
-        HistGradientBoostingClassifier,
-        RandomForestClassifier,
-    )
-    from sklearn.tree import DecisionTreeClassifier
-
-    specs.extend([
-        ("sk_gbc_depth2", "sklearn_gradient_boosting", lambda: GradientBoostingClassifier(n_estimators=180, max_depth=2, learning_rate=0.04, random_state=7)),
-        ("sk_gbc_depth3", "sklearn_gradient_boosting", lambda: GradientBoostingClassifier(n_estimators=140, max_depth=3, learning_rate=0.05, random_state=11)),
-        ("sk_hist_gbc", "sklearn_hist_gradient_boosting", lambda: HistGradientBoostingClassifier(max_iter=220, learning_rate=0.035, max_leaf_nodes=15, random_state=13)),
-        ("sk_random_forest", "sklearn_bagging", lambda: RandomForestClassifier(n_estimators=320, max_depth=5, min_samples_leaf=12, random_state=17, n_jobs=-1)),
-        ("sk_extra_trees", "sklearn_bagging", lambda: ExtraTreesClassifier(n_estimators=360, max_depth=5, min_samples_leaf=12, random_state=19, n_jobs=-1)),
-        ("sk_adaboost", "sklearn_boosting", lambda: AdaBoostClassifier(n_estimators=160, learning_rate=0.04, random_state=23)),
-        ("sk_bagged_tree", "sklearn_bagging", lambda: BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=4, min_samples_leaf=15), n_estimators=180, random_state=29, n_jobs=-1)),
-    ])
-
-    try:
-        from xgboost import XGBClassifier
-        specs.extend([
-            ("xgb_gpu_depth2", "xgboost_gpu", lambda: XGBClassifier(n_estimators=240, max_depth=2, learning_rate=0.035, subsample=0.85, colsample_bytree=0.85, eval_metric="logloss", tree_method="hist", device="cuda", random_state=31)),
-            ("xgb_gpu_depth3", "xgboost_gpu", lambda: XGBClassifier(n_estimators=220, max_depth=3, learning_rate=0.035, subsample=0.8, colsample_bytree=0.8, eval_metric="logloss", tree_method="hist", device="cuda", random_state=37)),
-        ])
-    except Exception:
-        pass
 
     try:
         from lightgbm import LGBMClassifier
-        specs.append(("lgbm_gpu", "lightgbm_gpu", lambda: LGBMClassifier(n_estimators=260, max_depth=3, learning_rate=0.03, subsample=0.85, colsample_bytree=0.85, device="gpu", random_state=41)))
-    except Exception:
-        pass
+        specs.append((
+            "lgbm_gpu_engineered",
+            "lightgbm_gpu_classifier",
+            lambda: LGBMClassifier(
+                n_estimators=520,
+                max_depth=4,
+                num_leaves=18,
+                learning_rate=0.025,
+                subsample=0.82,
+                colsample_bytree=0.62,
+                reg_alpha=0.12,
+                reg_lambda=0.45,
+                objective="binary",
+                device="gpu",
+                random_state=41,
+            ),
+        ))
+    except Exception as error:
+        specs.append(("lgbm_gpu_engineered", "lightgbm_import_error", lambda: (_ for _ in ()).throw(error)))
 
     try:
-        from catboost import CatBoostClassifier
-        specs.append(("catboost_gpu", "catboost_gpu", lambda: CatBoostClassifier(iterations=260, depth=3, learning_rate=0.035, loss_function="Logloss", task_type="GPU", random_seed=43, verbose=False)))
-    except Exception:
-        pass
+        from xgboost import XGBClassifier
+        specs.append((
+            "xgb_gpu_engineered",
+            "xgboost_gpu_classifier",
+            lambda: XGBClassifier(
+                n_estimators=520,
+                max_depth=3,
+                learning_rate=0.024,
+                subsample=0.82,
+                colsample_bytree=0.62,
+                reg_alpha=0.12,
+                reg_lambda=0.55,
+                objective="binary:logistic",
+                eval_metric="logloss",
+                tree_method="hist",
+                device="cuda",
+                random_state=37,
+            ),
+        ))
+    except Exception as error:
+        specs.append(("xgb_gpu_engineered", "xgboost_import_error", lambda: (_ for _ in ()).throw(error)))
 
-    return specs[:MAX_MODELS]
+    from sklearn.ensemble import ExtraTreesClassifier
+    specs.append((
+        "extra_trees_engineered",
+        "extra_trees_classifier",
+        lambda: ExtraTreesClassifier(
+            n_estimators=520,
+            max_depth=7,
+            min_samples_leaf=8,
+            max_features=0.45,
+            random_state=19,
+            n_jobs=-1,
+        ),
+    ))
+    return specs
 
 
-def predict_proba_positive(model, x: pd.DataFrame) -> np.ndarray:
+def predict_signal(model, x: pd.DataFrame) -> np.ndarray:
     if hasattr(model, "predict_proba"):
-        return model.predict_proba(x)[:, 1]
-    if hasattr(model, "decision_function"):
-        scores = model.decision_function(x)
-        return 1 / (1 + np.exp(-scores))
+        return np.asarray(model.predict_proba(x)[:, 1], dtype=float)
     return np.asarray(model.predict(x), dtype=float)
 
 
-def backtest_from_probabilities(frame: pd.DataFrame, probabilities: np.ndarray) -> pd.DataFrame:
+def backtest_from_scores(
+    frame: pd.DataFrame,
+    scores: np.ndarray,
+    long_threshold: float,
+    short_threshold: float | None = None,
+    allow_short: bool = False,
+) -> pd.DataFrame:
     result = frame[["date", "target_return_1d", "high_volume_candle"]].copy()
-    result["probability"] = probabilities
-    result["position"] = np.where((result["high_volume_candle"]) & (result["probability"] >= 0.55), 1.0, 0.0)
+    result["score"] = scores
+    result["probability"] = scores
+    high_volume = result["high_volume_candle"].to_numpy(dtype=bool)
+    result["position"] = 0.0
+    result.loc[high_volume & (result["score"] >= long_threshold), "position"] = 1.0
+    if allow_short and short_threshold is not None:
+        result.loc[high_volume & (result["score"] <= short_threshold), "position"] = -1.0
     result["strategy_return"] = result["position"] * result["target_return_1d"] / 100
     result["equity"] = (1 + result["strategy_return"]).cumprod()
     return result
@@ -212,12 +366,58 @@ def metrics_for(result: pd.DataFrame) -> dict:
     }
 
 
-def feature_importance(model, feature_cols: list[str], train: pd.DataFrame) -> list[dict]:
+def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[float, float | None, bool, dict]:
+    high_volume_scores = scores[validation["high_volume_candle"].to_numpy(dtype=bool)]
+    if len(high_volume_scores) == 0:
+        return float(np.nanmean(scores)), None, False, {"validation_sharpe_ratio": 0.0}
+
+    long_quantiles = np.linspace(0.52, 0.97, 20)
+    short_quantiles = np.linspace(0.03, 0.42, 18)
+    long_candidates = sorted(set(float(np.nanquantile(high_volume_scores, quantile)) for quantile in long_quantiles))
+    short_candidates = sorted(set(float(np.nanquantile(high_volume_scores, quantile)) for quantile in short_quantiles))
+    best_long = long_candidates[0]
+    best_short = None
+    best_allow_short = False
+    best_metrics = {"sharpe_ratio": -999.0, "total_return_pct": -999.0, "active_observations": 0}
+
+    for long_threshold in long_candidates:
+        result = backtest_from_scores(validation, scores, long_threshold)
+        metrics = metrics_for(result)
+        if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+            continue
+        if (metrics["sharpe_ratio"], metrics["total_return_pct"]) > (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"]):
+            best_long = long_threshold
+            best_short = None
+            best_allow_short = False
+            best_metrics = metrics
+
+    for long_threshold in long_candidates:
+        for short_threshold in short_candidates:
+            if short_threshold >= long_threshold:
+                continue
+            result = backtest_from_scores(validation, scores, long_threshold, short_threshold, allow_short=True)
+            metrics = metrics_for(result)
+            if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                continue
+            if (metrics["sharpe_ratio"], metrics["total_return_pct"]) > (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"]):
+                best_long = long_threshold
+                best_short = short_threshold
+                best_allow_short = True
+                best_metrics = metrics
+
+    if best_metrics["sharpe_ratio"] == -999.0:
+        best_long = float(np.nanquantile(high_volume_scores, 0.80))
+        best_metrics = metrics_for(backtest_from_scores(validation, scores, best_long))
+
+    best_metrics = {f"validation_{key}": value for key, value in best_metrics.items()}
+    return float(best_long), float(best_short) if best_short is not None else None, best_allow_short, best_metrics
+
+
+def feature_importance(model, feature_cols: list[str], train_x: pd.DataFrame, train_y: pd.Series) -> list[dict]:
     if hasattr(model, "feature_importances_"):
         values = np.asarray(model.feature_importances_, dtype=float)
     else:
-        target = train["target_up"]
-        values = np.asarray([abs(train[col].corr(target)) if train[col].std() else 0 for col in feature_cols], dtype=float)
+        values = np.asarray([abs(train_x[col].corr(train_y)) if train_x[col].std() else 0 for col in feature_cols], dtype=float)
     total = values.sum() or 1
     return [
         {"feature": feature, "importance": round(float(value / total), 6)}
@@ -254,18 +454,48 @@ def split_analysis(model_name: str, result: pd.DataFrame, test: pd.DataFrame, fe
     return split_metrics, correlations
 
 
+def fit_model(factory, x: pd.DataFrame, y: pd.Series, model_type: str):
+    model = factory()
+    try:
+        model.fit(x, y)
+        return model, model_type
+    except Exception as gpu_error:
+        print(f"{model_type} fit failed, retrying CPU-compatible fallback: {gpu_error}")
+        if "lightgbm" in model_type:
+            from lightgbm import LGBMClassifier
+            model = LGBMClassifier(n_estimators=420, max_depth=4, num_leaves=18, learning_rate=0.026, objective="binary", random_state=141)
+        elif "xgboost" in model_type:
+            from xgboost import XGBClassifier
+            model = XGBClassifier(n_estimators=420, max_depth=3, learning_rate=0.026, objective="binary:logistic", eval_metric="logloss", tree_method="hist", random_state=137)
+        else:
+            raise
+        model.fit(x, y)
+        return model, f"{model_type}_cpu_fallback"
+
+
 def run():
-    data, feature_cols = build_dataset()
-    if len(data) <= TRAIN_END_OFFSET + 200:
-        raise RuntimeError("Not enough data for older-than-two-year training and two-year backtest.")
+    data, base_features = build_dataset()
+    if len(data) <= TRAIN_END_OFFSET + VALIDATION_OFFSET + 200:
+        raise RuntimeError("Not enough data for older-than-two-year training, validation, and two-year backtest.")
 
     test_start_index = len(data) - TRAIN_END_OFFSET
-    train = data.iloc[:test_start_index].copy()
-    train = train[train["high_volume_candle"]].copy()
-    test = data.iloc[test_start_index:].copy()
-    x_train = train[feature_cols]
-    y_train = train["target_up"]
-    x_test = test[feature_cols]
+    validation_start_index = test_start_index - VALIDATION_OFFSET
+    feature_matrix, feature_cols, interaction_sources = build_model_matrices(data, base_features, test_start_index)
+    model_frame = pd.concat(
+        [
+            data[["date", "target_return_1d", "target_up", "high_volume_candle"]].reset_index(drop=True),
+            feature_matrix.reset_index(drop=True),
+        ],
+        axis=1,
+    )
+
+    fit_frame = model_frame.iloc[:validation_start_index].copy()
+    validation = model_frame.iloc[validation_start_index:test_start_index].copy()
+    train_full = model_frame.iloc[:test_start_index].copy()
+    test = model_frame.iloc[test_start_index:].copy()
+
+    fit_high_volume = fit_frame[fit_frame["high_volume_candle"]].copy()
+    train_full_high_volume = train_full[train_full["high_volume_candle"]].copy()
     specs = model_specs()
     model_rows = []
     split_rows = []
@@ -273,82 +503,122 @@ def run():
     feature_rows = []
     prediction_frames = []
 
-    for batch_start in range(0, len(specs), BATCH_SIZE):
-        batch = specs[batch_start:batch_start + BATCH_SIZE]
-        print(f"Running model batch {batch_start // BATCH_SIZE + 1}: {[name for name, _, _ in batch]}")
-        for name, model_type, factory in batch:
-            try:
-                model = factory()
-                try:
-                    model.fit(x_train, y_train)
-                except Exception as gpu_error:
-                    print(f"{name} GPU/default fit failed, retrying CPU-compatible fallback: {gpu_error}")
-                    from sklearn.ensemble import GradientBoostingClassifier
-                    model_type = f"{model_type}_cpu_fallback"
-                    model = GradientBoostingClassifier(n_estimators=160, max_depth=2, learning_rate=0.04, random_state=101)
-                    model.fit(x_train, y_train)
+    print(json.dumps({
+        "base_features": len(base_features),
+        "interaction_sources": len(interaction_sources),
+        "final_features": len(feature_cols),
+        "models": [name for name, _, _ in specs],
+    }, indent=2))
 
-                probabilities = predict_proba_positive(model, x_test)
-                result = backtest_from_probabilities(test, probabilities)
-                metrics = metrics_for(result)
-                importances = feature_importance(model, feature_cols, train)
-                split_metrics, correlations = split_analysis(name, result, test, feature_cols, importances)
-                row = {
-                    "name": name,
-                    "model_type": model_type,
-                    "status": "ok",
-                    "message": "Trained only on high-volume candles older than the latest two-year test window.",
-                    "backtest_start": str(test["date"].iloc[0]),
-                    "backtest_end": str(test["date"].iloc[-1]),
-                    "features": feature_cols,
-                    **metrics,
-                    "feature_importance": importances[:12],
-                    "split_metrics": split_metrics,
-                    "split_correlations": correlations[:40],
-                    "equity_curve": [
-                        {
-                            "date": str(row["date"]),
-                            "equity": round(float(row["equity"]), 4),
-                            "daily_return_pct": round(float(row["strategy_return"] * 100), 4),
-                            "position": float(row["position"]),
-                        }
-                        for _, row in result.iloc[::max(1, len(result) // 120)].iterrows()
-                    ],
-                }
-                model_rows.append(row)
-                split_rows.extend(split_metrics)
-                corr_rows.extend(correlations)
-                feature_rows.extend({"model_name": name, **item} for item in importances)
-                prediction_frames.append(result.assign(model_name=name))
-            except Exception as error:
-                model_rows.append({
-                    "name": name,
-                    "model_type": model_type,
-                    "status": "error",
-                    "message": str(error),
-                    "sharpe_ratio": 0,
-                    "win_rate_pct": 0,
-                    "total_return_pct": 0,
-                    "max_drawdown_pct": 0,
-                    "exposure_pct": 0,
-                    "trades": 0,
-                    "observations": 0,
-                    "active_observations": 0,
-                    "feature_importance": [],
-                    "split_metrics": [],
-                    "split_correlations": [],
-                    "equity_curve": [],
-                })
+    for name, model_type, factory in specs:
+        try:
+            print(f"Running engineered model: {name}")
+            validation_model, validation_model_type = fit_model(
+                factory,
+                fit_high_volume[feature_cols],
+                fit_high_volume["target_up"],
+                model_type,
+            )
+            validation_scores = predict_signal(validation_model, validation[feature_cols])
+            long_threshold, short_threshold, allow_short, validation_metrics = select_thresholds(validation, validation_scores)
+
+            final_model, final_model_type = fit_model(
+                factory,
+                train_full_high_volume[feature_cols],
+                train_full_high_volume["target_up"],
+                validation_model_type,
+            )
+            scores = predict_signal(final_model, test[feature_cols])
+            result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short)
+            metrics = metrics_for(result)
+            importances = feature_importance(final_model, feature_cols, train_full_high_volume[feature_cols], train_full_high_volume["target_up"])
+            split_metrics, correlations = split_analysis(name, result, test, feature_cols, importances)
+            target_met = metrics["sharpe_ratio"] >= SHARPE_TARGET
+            row = {
+                "name": name,
+                "model_type": final_model_type,
+                "status": "ok",
+                "message": (
+                    f"Engineered features with normalized first-order inputs and re-normalized second-order interactions. "
+                    f"Validation-selected threshold; Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
+                ),
+                "backtest_start": str(test["date"].iloc[0]),
+                "backtest_end": str(test["date"].iloc[-1]),
+                "features": feature_cols,
+                "feature_engineering": [
+                    "volume",
+                    "trend_flags",
+                    "volume_differences",
+                    "rolling_values",
+                    "rsi",
+                    "candle_size",
+                    "lag_7_30",
+                    "bollinger_bands",
+                    "golden_cross",
+                    "normalized_second_order_arithmetic",
+                ],
+                "feature_count": len(feature_cols),
+                "interaction_source_count": len(interaction_sources),
+                "selected_threshold": round(float(long_threshold), 6),
+                "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
+                "strategy_side": "long_short" if allow_short else "long_only",
+                "sharpe_target": SHARPE_TARGET,
+                "target_met": target_met,
+                **validation_metrics,
+                **metrics,
+                "feature_importance": importances[:16],
+                "split_metrics": split_metrics,
+                "split_correlations": correlations[:40],
+                "equity_curve": [
+                    {
+                        "date": str(row["date"]),
+                        "equity": round(float(row["equity"]), 4),
+                        "daily_return_pct": round(float(row["strategy_return"] * 100), 4),
+                        "position": float(row["position"]),
+                    }
+                    for _, row in result.iloc[::max(1, len(result) // 120)].iterrows()
+                ],
+            }
+            model_rows.append(row)
+            split_rows.extend(split_metrics)
+            corr_rows.extend(correlations)
+            feature_rows.extend({"model_name": name, **item} for item in importances)
+            prediction_frames.append(result.assign(model_name=name))
+        except Exception as error:
+            model_rows.append({
+                "name": name,
+                "model_type": model_type,
+                "status": "error",
+                "message": str(error),
+                "sharpe_ratio": 0,
+                "win_rate_pct": 0,
+                "total_return_pct": 0,
+                "max_drawdown_pct": 0,
+                "exposure_pct": 0,
+                "trades": 0,
+                "observations": 0,
+                "active_observations": 0,
+                "feature_importance": [],
+                "split_metrics": [],
+                "split_correlations": [],
+                "equity_curve": [],
+            })
 
     summary = {
         "run_id": RUN_ID,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "accelerator": "GPU requested, CPU fallback enabled",
+        "accelerator": "GPU requested for LightGBM/XGBoost, ExtraTrees CPU parallel",
         "high_volume_rule": f"BTC volume >= rolling 252D {int(HIGH_VOLUME_QUANTILE * 100)}th percentile",
-        "training_window": f"{data['date'].iloc[0]} to {data['date'].iloc[test_start_index - 1]}",
+        "training_window": f"{data['date'].iloc[0]} to {data['date'].iloc[validation_start_index - 1]}",
+        "validation_window": f"{data['date'].iloc[validation_start_index]} to {data['date'].iloc[test_start_index - 1]}",
         "backtest_window": f"{test['date'].iloc[0]} to {test['date'].iloc[-1]}",
-        "batch_size": BATCH_SIZE,
-        "models_requested": MAX_MODELS,
+        "batch_size": 1,
+        "models_requested": len(specs),
+        "sharpe_target": SHARPE_TARGET,
+        "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions.",
+        "base_feature_count": len(base_features),
+        "interaction_source_count": len(interaction_sources),
+        "final_feature_count": len(feature_cols),
         "models": sorted(model_rows, key=lambda row: row.get("sharpe_ratio", -999), reverse=True),
     }
 

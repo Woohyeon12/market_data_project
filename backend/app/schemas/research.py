@@ -175,6 +175,15 @@ class KaggleModelResult(BaseModel):
     backtest_start: str | None = None
     backtest_end: str | None = None
     features: list[str] = []
+    feature_engineering: list[str] = []
+    feature_count: int | None = None
+    interaction_source_count: int | None = None
+    selected_threshold: float | None = None
+    selected_short_threshold: float | None = None
+    strategy_side: str | None = None
+    validation_sharpe_ratio: float | None = None
+    sharpe_target: float | None = None
+    target_met: bool | None = None
     feature_importance: list[ModelFeatureImportance] = []
     split_metrics: list[ModelSplitMetric] = []
     split_correlations: list[ModelSplitCorrelation] = []
@@ -187,9 +196,15 @@ class KaggleModelRun(BaseModel):
     accelerator: str
     high_volume_rule: str
     training_window: str
+    validation_window: str | None = None
     backtest_window: str
     batch_size: int
     models_requested: int
+    sharpe_target: float | None = None
+    feature_engineering: str | None = None
+    base_feature_count: int | None = None
+    interaction_source_count: int | None = None
+    final_feature_count: int | None = None
     models: list[KaggleModelResult] = []
 
 
