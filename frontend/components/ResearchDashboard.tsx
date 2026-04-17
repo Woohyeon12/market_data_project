@@ -68,8 +68,16 @@ const DASHBOARD_PAGES = [
   },
 ] as const;
 
+const FUNDAMENTAL_SORT_OPTIONS = [
+  { label: "ROE", value: "fundamental_roe", direction: "desc" },
+  { label: "Revenue growth", value: "fundamental_revenue_growth_yoy", direction: "desc" },
+  { label: "FCF margin", value: "fundamental_fcf_margin", direction: "desc" },
+  { label: "Low leverage", value: "fundamental_debt_to_equity", direction: "asc" },
+] as const;
+
 type ChartSize = keyof typeof CHART_SIZES;
 type DashboardPage = (typeof DASHBOARD_PAGES)[number]["value"];
+type FundamentalSort = (typeof FUNDAMENTAL_SORT_OPTIONS)[number]["value"];
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -502,6 +510,7 @@ export function ResearchDashboard() {
   const [showRsi, setShowRsi] = useState(true);
   const [selectedFeature, setSelectedFeature] = useState("BTC return");
   const [activePage, setActivePage] = useState<DashboardPage>("overview");
+  const [fundamentalSort, setFundamentalSort] = useState<FundamentalSort>("fundamental_roe");
 
   useEffect(() => {
     let active = true;
@@ -543,6 +552,19 @@ export function ResearchDashboard() {
   const chartSet = [...markets.index_charts, ...markets.bond_charts];
   const equityFundamentals = markets.equity_fundamentals ?? [];
   const fundamentalModelScores = markets.fundamental_model_scores ?? [];
+  const selectedFundamentalSort = FUNDAMENTAL_SORT_OPTIONS.find((option) => {
+    return option.value === fundamentalSort;
+  }) ?? FUNDAMENTAL_SORT_OPTIONS[0];
+  const sortedEquityFundamentals = [...equityFundamentals].sort((first, second) => {
+    const firstValue = first.model_features[fundamentalSort] ?? Number.NEGATIVE_INFINITY;
+    const secondValue = second.model_features[fundamentalSort] ?? Number.NEGATIVE_INFINITY;
+
+    if (selectedFundamentalSort.direction === "asc") {
+      return firstValue - secondValue;
+    }
+
+    return secondValue - firstValue;
+  });
   const activeFeature = markets.correlations.assets.includes(selectedFeature)
     ? selectedFeature
     : markets.correlations.assets[0] ?? "BTC return";
@@ -862,8 +884,23 @@ export function ResearchDashboard() {
             <p className="source-label">
               Annual statements, derived ratios, and model-ready financial features for tracked stocks.
             </p>
+            <div className="fundamental-toolbar" aria-label="Fundamental sorting controls">
+              <span>Sort stocks by</span>
+              <div className="segmented-control">
+                {FUNDAMENTAL_SORT_OPTIONS.map((option) => (
+                  <button
+                    className={fundamentalSort === option.value ? "control-active" : ""}
+                    key={option.value}
+                    onClick={() => setFundamentalSort(option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="fundamental-grid" aria-label="Equity financial statement summaries">
-              {equityFundamentals.map((item) => (
+              {sortedEquityFundamentals.map((item) => (
                 <article className="fundamental-card" key={item.symbol}>
                   <div className="fundamental-header">
                     <div>

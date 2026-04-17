@@ -534,6 +534,24 @@ h1 {
   margin-bottom: 14px;
 }
 
+.fundamental-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.fundamental-toolbar > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .fundamental-card {
   display: grid;
   gap: 12px;

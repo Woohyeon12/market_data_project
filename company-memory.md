@@ -35,6 +35,7 @@ Build a Bitcoin research-focused financial intelligence company around this proj
 
 ## Latest Operating Note
 
+- 2026-04-18 heartbeat: Design/development check added Fundamentals page sorting by ROE, revenue growth, FCF margin, and low leverage so statement-derived metrics are easier to compare.
 - 2026-04-17: Added user priority for historical stock financial statements, derived fundamental indicators, and financial-statement-based boosting/bagging model support.
 - 2026-04-17 heartbeat: Development/design meeting checked the new page-switching dashboard and added per-page count badges so each list communicates its current contents before the user clicks.
 - 2026-04-17 23:45 KST: Added a design/development request for click-based page switching so the dashboard becomes multiple focused lists instead of one long page. Implementation priority is section navigation, next/previous controls, and cleaner page grouping.
