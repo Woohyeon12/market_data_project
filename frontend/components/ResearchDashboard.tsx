@@ -505,6 +505,13 @@ export function ResearchDashboard() {
     .filter((cell) => cell.value < 0)
     .sort((first, second) => first.value - second.value)
     .slice(0, 3);
+  const pageStats: Record<DashboardPage, string> = {
+    overview: `${report.scenarios.length} scenarios`,
+    markets: `${chartSet.length} charts`,
+    signals: `${markets.correlations.assets.length} features`,
+    models: `${modelBacktests.results.length} models`,
+    news: `${filteredNews.length} news`,
+  };
   const activePageIndex = DASHBOARD_PAGES.findIndex((page) => page.value === activePage);
   const activePageInfo = DASHBOARD_PAGES[activePageIndex] ?? DASHBOARD_PAGES[0];
   const goToPageOffset = (offset: number) => {
@@ -539,6 +546,7 @@ export function ResearchDashboard() {
             >
               <strong>{dashboardPage.label}</strong>
               <span>{dashboardPage.description}</span>
+              <em>{pageStats[dashboardPage.value]}</em>
             </button>
           ))}
         </nav>

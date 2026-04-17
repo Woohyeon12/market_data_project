@@ -126,6 +126,20 @@ h1 {
   line-height: 1.35;
 }
 
+.page-switcher em {
+  align-self: end;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 4px 7px;
+  color: var(--accent-strong);
+  background: var(--ink-soft);
+  border-radius: 8px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .page-switcher .page-tab-active {
   color: #ffffff;
   background: var(--accent-strong);
@@ -134,6 +148,11 @@ h1 {
 
 .page-switcher .page-tab-active span {
   color: rgba(255, 255, 255, 0.78);
+}
+
+.page-switcher .page-tab-active em {
+  color: var(--accent-strong);
+  background: #ffffff;
 }
 
 .page-turner {
