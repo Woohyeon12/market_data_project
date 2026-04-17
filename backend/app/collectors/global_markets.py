@@ -259,7 +259,7 @@ def get_bond_charts() -> list[IndexChart]:
     ]
 
 
-def _daily_changes(points: list[IndexChartPoint], lookback_days: int) -> dict[str, float]:
+def _daily_returns(points: list[IndexChartPoint], lookback_days: int) -> dict[str, float]:
     recent_points = points[-(lookback_days + 1):]
     changes = {}
 
@@ -269,6 +269,76 @@ def _daily_changes(points: list[IndexChartPoint], lookback_days: int) -> dict[st
         changes[current.date] = ((current.close - previous.close) / previous.close) * 100
 
     return changes
+
+
+def _level_changes(points: list[IndexChartPoint], lookback_days: int, multiplier: float = 1.0) -> dict[str, float]:
+    recent_points = points[-(lookback_days + 1):]
+    changes = {}
+
+    for previous, current in zip(recent_points, recent_points[1:]):
+        changes[current.date] = (current.close - previous.close) * multiplier
+
+    return changes
+
+
+def _rolling_volatility(points: list[IndexChartPoint], lookback_days: int, window: int = 20) -> dict[str, float]:
+    recent_points = points[-(lookback_days + window + 1):]
+    returns = []
+    values = {}
+
+    for previous, current in zip(recent_points, recent_points[1:]):
+        if previous.close == 0:
+            returns.append((current.date, 0.0))
+        else:
+            returns.append((current.date, ((current.close - previous.close) / previous.close) * 100))
+
+    for index, (date, _) in enumerate(returns):
+        if index < window - 1:
+            continue
+
+        window_values = [value for _, value in returns[index - window + 1:index + 1]]
+        mean = sum(window_values) / len(window_values)
+        variance = sum((value - mean) ** 2 for value in window_values) / len(window_values)
+        values[date] = variance ** 0.5
+
+    return values
+
+
+def _rsi_feature(points: list[IndexChartPoint], lookback_days: int, period: int = 14) -> dict[str, float]:
+    recent_points = points[-(lookback_days + period + 1):]
+    values = {}
+
+    for index in range(period, len(recent_points)):
+        window = recent_points[index - period:index + 1]
+        gains = 0.0
+        losses = 0.0
+
+        for previous, current in zip(window, window[1:]):
+            change = current.close - previous.close
+            if change >= 0:
+                gains += change
+            else:
+                losses += abs(change)
+
+        average_gain = gains / period
+        average_loss = losses / period
+        values[recent_points[index].date] = 100.0 if average_loss == 0 else 100 - 100 / (1 + average_gain / average_loss)
+
+    return values
+
+
+def _drawdown_feature(points: list[IndexChartPoint], lookback_days: int, window: int = 60) -> dict[str, float]:
+    recent_points = points[-(lookback_days + window):]
+    values = {}
+
+    for index, point in enumerate(recent_points):
+        if index < window - 1:
+            continue
+
+        high = max(item.close for item in recent_points[index - window + 1:index + 1])
+        values[point.date] = ((point.close - high) / high) * 100 if high else 0.0
+
+    return values
 
 
 def _correlation(first: list[float], second: list[float]) -> float:
@@ -291,43 +361,63 @@ def build_correlation_analysis(
     charts: list[IndexChart],
     lookback_days: int = 252,
 ) -> CorrelationAnalysis:
-    changes_by_asset = {
-        chart.name: _daily_changes(chart.points, lookback_days)
-        for chart in charts
-        if len(chart.points) > 30
-    }
-    assets = list(changes_by_asset)
+    charts_by_name = {chart.name: chart for chart in charts}
+    bitcoin = charts_by_name.get("Bitcoin")
+    if not bitcoin:
+        return CorrelationAnalysis(
+            lookback_days=lookback_days,
+            assets=[],
+            matrix=[],
+            insights=["Bitcoin history is required before feature correlation can run."],
+            data_source="SQLite OHLC engineered features",
+        )
+
+    target_name = "BTC daily return"
+    target = _daily_returns(bitcoin.points, lookback_days)
+    feature_series = {}
+
+    for chart in charts:
+        if chart.name == "Bitcoin" or len(chart.points) <= 30:
+            continue
+
+        if "Yield" in chart.name:
+            feature_series[f"{chart.name} daily bp change"] = _level_changes(chart.points, lookback_days, multiplier=100)
+        else:
+            feature_series[f"{chart.name} daily return"] = _daily_returns(chart.points, lookback_days)
+
+    feature_series["BTC RSI(14)"] = _rsi_feature(bitcoin.points, lookback_days)
+    feature_series["BTC 20D realized volatility"] = _rolling_volatility(bitcoin.points, lookback_days)
+    feature_series["BTC 60D drawdown"] = _drawdown_feature(bitcoin.points, lookback_days)
+
     matrix = []
-
-    for y_asset in assets:
-        for x_asset in assets:
-            common_dates = sorted(set(changes_by_asset[x_asset]) & set(changes_by_asset[y_asset]))
-            x_values = [changes_by_asset[x_asset][date] for date in common_dates]
-            y_values = [changes_by_asset[y_asset][date] for date in common_dates]
-            matrix.append(
-                CorrelationCell(
-                    x=x_asset,
-                    y=y_asset,
-                    value=round(_correlation(x_values, y_values), 2),
-                )
+    for feature_name, series in feature_series.items():
+        common_dates = sorted(set(target) & set(series))
+        target_values = [target[date] for date in common_dates]
+        feature_values = [series[date] for date in common_dates]
+        matrix.append(
+            CorrelationCell(
+                x=feature_name,
+                y=target_name,
+                value=round(_correlation(feature_values, target_values), 2),
             )
+        )
 
-    btc_pairs = [cell for cell in matrix if cell.y == "Bitcoin" and cell.x != "Bitcoin"]
-    strongest_positive = max(btc_pairs, key=lambda cell: cell.value, default=None)
-    strongest_negative = min(btc_pairs, key=lambda cell: cell.value, default=None)
+    matrix = sorted(matrix, key=lambda cell: abs(cell.value), reverse=True)
+    strongest_positive = max(matrix, key=lambda cell: cell.value, default=None)
+    strongest_negative = min(matrix, key=lambda cell: cell.value, default=None)
     insights = [
-        f"Correlation uses daily percentage changes over the latest {lookback_days} trading days.",
-        "Only assets with at least 30 overlapping daily observations are included in the heatmap.",
+        f"Feature correlation targets BTC daily return over the latest {lookback_days} trading days.",
+        "Rate features use daily yield changes in basis points; market features use daily percentage returns.",
     ]
     if strongest_positive:
-        insights.append(f"Bitcoin is most positively linked with {strongest_positive.x} at {strongest_positive.value:.2f}.")
+        insights.append(f"Strongest positive feature is {strongest_positive.x} at {strongest_positive.value:.2f}.")
     if strongest_negative:
-        insights.append(f"Bitcoin is most negatively linked with {strongest_negative.x} at {strongest_negative.value:.2f}.")
+        insights.append(f"Strongest negative feature is {strongest_negative.x} at {strongest_negative.value:.2f}.")
 
     return CorrelationAnalysis(
         lookback_days=lookback_days,
-        assets=assets,
+        assets=[cell.x for cell in matrix],
         matrix=matrix,
         insights=insights,
-        data_source="SQLite OHLC daily changes",
+        data_source="SQLite OHLC engineered features",
     )

@@ -56,7 +56,7 @@ def build_markets_overview() -> MarketsOverview:
         summary=[
             "Global market overview includes selected US, Korea, and Japan equities.",
             "Major indices, gold spot, and government bond yields are included for macro context around BTC research.",
-            "Correlation analysis compares daily percentage changes across BTC, equities, gold, and bond yields.",
+            "Feature correlation compares BTC daily returns with market returns, yield changes, RSI, volatility, and drawdown factors.",
             f"Market data is currently sourced from {', '.join(sources)}.",
         ],
         disclaimer="Market overview is for research only. Not investment advice.",

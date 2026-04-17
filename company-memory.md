@@ -35,6 +35,7 @@ Build a Bitcoin research-focused financial intelligence company around this proj
 
 ## Latest Operating Note
 
+- 2026-04-17 21:55 KST: Corrected correlation direction from asset-to-asset heatmap toward BTC target feature correlations, and prioritized chart axis labels plus text overflow fixes.
 - 2026-04-17 21:25 KST: Added user priority for major government bond yield monitoring and cross-asset correlation analysis across BTC, equities, gold, and yields.
 - 2026-04-17 21:05 KST: Added user priority for major BTC news summaries with a three-hour refresh cadence and a more polished research dashboard presentation.
 - 2026-04-17 20:45 KST: Added user priority for BTC charting, Bollinger Bands, RSI, chart range/size controls, and proactive small feature additions during recurring operating meetings.

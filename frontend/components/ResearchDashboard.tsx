@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   fallbackMarkets,
   fallbackReport,
@@ -57,6 +57,34 @@ function formatMarketPrice(item: MarketInstrument) {
     currency: item.currency,
     maximumFractionDigits: item.currency === "JPY" || item.currency === "KRW" ? 0 : 2,
   }).format(item.price);
+}
+
+function formatAxisValue(value: number, currency: string) {
+  if (currency === "Yield") {
+    return `${value.toFixed(2)}%`;
+  }
+
+  if (value >= 1000) {
+    return new Intl.NumberFormat("en-US", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(value);
+  }
+
+  return value.toFixed(value >= 100 ? 0 : 2);
+}
+
+function formatShortDate(value?: string) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function groupInstruments(instruments: MarketInstrument[]) {
@@ -180,6 +208,7 @@ function scaledPath(
   values: Array<number | null>,
   yForValue: (value: number) => number,
   slot: number,
+  xOffset = 0,
 ) {
   return values
     .map((value, index) => {
@@ -188,15 +217,20 @@ function scaledPath(
       }
 
       const command = values.slice(0, index).some((previous) => previous !== null) ? "L" : "M";
-      return `${command} ${slot * index + slot / 2} ${yForValue(value)}`;
+      return `${command} ${xOffset + slot * index + slot / 2} ${yForValue(value)}`;
     })
     .filter(Boolean)
     .join(" ");
 }
 
-function chartGeometry(points: IndexChart["points"], size: ChartSize) {
-  const width = 280;
+function chartGeometry(points: IndexChart["points"], size: ChartSize, currency: string) {
+  const width = 328;
+  const leftAxis = 42;
+  const rightPad = 8;
+  const bottomAxis = 22;
+  const plotWidth = width - leftAxis - rightPad;
   const height = CHART_SIZES[size].height;
+  const plotHeight = height - bottomAxis;
   const sampledPoints = sampledChartPoints(points, CHART_SIZES[size].maxPoints);
   const closes = sampledPoints.map((point) => point.close);
   const bollinger = calculateBollinger(closes);
@@ -210,16 +244,16 @@ function chartGeometry(points: IndexChart["points"], size: ChartSize) {
   const min = Math.min(...lows, ...bandValues);
   const max = Math.max(...highs, ...bandValues);
   const range = max - min || 1;
-  const slot = sampledPoints.length ? width / sampledPoints.length : width;
+  const slot = sampledPoints.length ? plotWidth / sampledPoints.length : plotWidth;
   const bodyWidth = Math.max(1.5, Math.min(8, slot * 0.58));
-  const priceHeight = Math.round(height * 0.72);
+  const priceHeight = Math.round(plotHeight * 0.72);
   const rsiTop = priceHeight + 12;
-  const rsiHeight = Math.max(36, height - rsiTop);
+  const rsiHeight = Math.max(32, plotHeight - rsiTop);
   const priceY = (value: number) => priceHeight - ((value - min) / range) * priceHeight;
   const rsiY = (value: number) => rsiTop + rsiHeight - (value / 100) * rsiHeight;
 
   const candles = sampledPoints.map((point, index) => {
-    const centerX = slot * index + slot / 2;
+    const centerX = leftAxis + slot * index + slot / 2;
     const openY = priceY(point.open);
     const closeY = priceY(point.close);
     const highY = priceY(point.high);
@@ -242,10 +276,13 @@ function chartGeometry(points: IndexChart["points"], size: ChartSize) {
 
   return {
     candles,
-    upperPath: scaledPath(bollinger.map((band) => band.upper), priceY, slot),
-    middlePath: scaledPath(sma20, priceY, slot),
-    lowerPath: scaledPath(bollinger.map((band) => band.lower), priceY, slot),
-    rsiPath: scaledPath(rsi14, rsiY, slot),
+    upperPath: scaledPath(bollinger.map((band) => band.upper), priceY, slot, leftAxis),
+    middlePath: scaledPath(sma20, priceY, slot, leftAxis),
+    lowerPath: scaledPath(bollinger.map((band) => band.lower), priceY, slot, leftAxis),
+    rsiPath: scaledPath(rsi14, rsiY, slot, leftAxis),
+    leftAxis,
+    plotWidth,
+    width,
     height,
     priceBaseline: priceHeight,
     rsiTop,
@@ -253,6 +290,22 @@ function chartGeometry(points: IndexChart["points"], size: ChartSize) {
     rsi30: rsiY(30),
     rsi70: rsiY(70),
     sampledCount: sampledPoints.length,
+    yTicks: [
+      { label: formatAxisValue(max, currency), y: priceY(max) },
+      { label: formatAxisValue((max + min) / 2, currency), y: priceY((max + min) / 2) },
+      { label: formatAxisValue(min, currency), y: priceY(min) },
+    ],
+    xTicks: [
+      { label: formatShortDate(sampledPoints[0]?.date), x: leftAxis },
+      {
+        label: formatShortDate(sampledPoints[Math.floor(sampledPoints.length / 2)]?.date),
+        x: leftAxis + plotWidth / 2,
+      },
+      {
+        label: formatShortDate(sampledPoints[sampledPoints.length - 1]?.date),
+        x: leftAxis + plotWidth,
+      },
+    ],
   };
 }
 
@@ -289,6 +342,10 @@ function correlationColor(value: number) {
 
 function correlationTextColor(value: number) {
   return Math.abs(value) > 0.55 ? "#ffffff" : "var(--foreground)";
+}
+
+function correlationBarWidth(value: number) {
+  return `${Math.max(4, Math.abs(value) * 50)}%`;
 }
 
 export function ResearchDashboard() {
@@ -458,7 +515,7 @@ export function ResearchDashboard() {
               {chartSet.map((chart) => {
                 const visiblePoints = visibleChartPoints(chart, chartRange);
                 const visibleChart = { ...chart, points: visiblePoints };
-                const geometry = chartGeometry(visiblePoints, chartSize);
+                const geometry = chartGeometry(visiblePoints, chartSize, chart.currency);
                 const changePct = chartChangePct(visibleChart);
                 const firstPoint = visiblePoints[0];
                 const lastPoint = visiblePoints[visiblePoints.length - 1];
@@ -477,15 +534,21 @@ export function ResearchDashboard() {
                     <svg
                       className="candle-plot"
                       style={{ height: `${geometry.height + 14}px` }}
-                      viewBox={`0 0 280 ${geometry.height}`}
+                      viewBox={`0 0 ${geometry.width} ${geometry.height}`}
                       role="img"
                       aria-label={`${chart.name} candlestick plot with technical indicators`}
                     >
-                      <line x1="0" y1={geometry.priceBaseline} x2="280" y2={geometry.priceBaseline} />
+                      {geometry.yTicks.map((tick) => (
+                        <g className="axis-tick" key={`${chart.symbol}-${tick.label}`}>
+                          <line x1={geometry.leftAxis} y1={tick.y} x2={geometry.width} y2={tick.y} />
+                          <text x={0} y={tick.y + 3}>{tick.label}</text>
+                        </g>
+                      ))}
+                      <line x1={geometry.leftAxis} y1={geometry.priceBaseline} x2={geometry.width} y2={geometry.priceBaseline} />
                       {showRsi ? (
                         <>
-                          <line className="rsi-guide" x1="0" y1={geometry.rsi70} x2="280" y2={geometry.rsi70} />
-                          <line className="rsi-guide" x1="0" y1={geometry.rsi30} x2="280" y2={geometry.rsi30} />
+                          <line className="rsi-guide" x1={geometry.leftAxis} y1={geometry.rsi70} x2={geometry.width} y2={geometry.rsi70} />
+                          <line className="rsi-guide" x1={geometry.leftAxis} y1={geometry.rsi30} x2={geometry.width} y2={geometry.rsi30} />
                           <path className="rsi-line" d={geometry.rsiPath} />
                         </>
                       ) : null}
@@ -514,6 +577,12 @@ export function ResearchDashboard() {
                             height={candle.bodyHeight}
                           />
                         </g>
+                      ))}
+                      <line className="date-axis" x1={geometry.leftAxis} y1={geometry.height - 16} x2={geometry.width} y2={geometry.height - 16} />
+                      {geometry.xTicks.map((tick) => (
+                        <text className="date-tick" key={`${chart.symbol}-${tick.label}-${tick.x}`} x={tick.x} y={geometry.height - 3}>
+                          {tick.label}
+                        </text>
                       ))}
                     </svg>
                     <div className="chart-range">
@@ -581,43 +650,29 @@ export function ResearchDashboard() {
           </div>
 
           <div className="panel">
-            <h2>Cross-Asset Correlation</h2>
+            <h2>BTC Feature Correlation</h2>
             <p className="source-label">
-              {markets.correlations.lookback_days} trading days - {markets.correlations.data_source}
+              Target: BTC daily return - {markets.correlations.lookback_days} trading days - {markets.correlations.data_source}
             </p>
-            <div
-              className="correlation-grid"
-              aria-label="Cross asset correlation heatmap"
-              style={{
-                gridTemplateColumns: `minmax(110px, 1.2fr) repeat(${markets.correlations.assets.length}, minmax(74px, 1fr))`,
-              }}
-            >
-              <div className="correlation-corner">Asset</div>
-              {markets.correlations.assets.map((asset) => (
-                <div className="correlation-axis" key={`x-${asset}`}>{asset}</div>
-              ))}
-              {markets.correlations.assets.map((yAsset) => (
-                <Fragment key={`row-${yAsset}`}>
-                  <div className="correlation-axis" key={`y-${yAsset}`}>{yAsset}</div>
-                  {markets.correlations.assets.map((xAsset) => {
-                    const value = markets.correlations.matrix.find((cell) => {
-                      return cell.x === xAsset && cell.y === yAsset;
-                    })?.value ?? 0;
-
-                    return (
-                      <div
-                        className="correlation-cell"
-                        key={`${xAsset}-${yAsset}`}
-                        style={{
-                          background: correlationColor(value),
-                          color: correlationTextColor(value),
-                        }}
-                      >
-                        {value.toFixed(2)}
-                      </div>
-                    );
-                  })}
-                </Fragment>
+            <div className="feature-correlation-list" aria-label="BTC feature correlation bars">
+              {markets.correlations.matrix.map((cell) => (
+                <div className="feature-correlation-row" key={cell.x}>
+                  <span>{cell.x}</span>
+                  <div className="feature-correlation-track">
+                    <div
+                      className={cell.value >= 0 ? "feature-correlation-positive" : "feature-correlation-negative"}
+                      style={{ width: correlationBarWidth(cell.value) }}
+                    />
+                  </div>
+                  <strong
+                    style={{
+                      background: correlationColor(cell.value),
+                      color: correlationTextColor(cell.value),
+                    }}
+                  >
+                    {cell.value.toFixed(2)}
+                  </strong>
+                </div>
               ))}
             </div>
             <ul className="correlation-insights">

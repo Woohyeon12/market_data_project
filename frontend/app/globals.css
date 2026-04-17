@@ -17,6 +17,10 @@
   box-sizing: border-box;
 }
 
+* {
+  min-width: 0;
+}
+
 html,
 body {
   margin: 0;
@@ -152,6 +156,7 @@ h1 {
   margin: 0;
   font-size: 28px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .summary-list,
@@ -187,37 +192,59 @@ h1 {
   gap: 16px;
 }
 
-.correlation-grid {
+.feature-correlation-list {
   display: grid;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  gap: 10px;
 }
 
-.correlation-corner,
-.correlation-axis,
-.correlation-cell {
-  min-height: 42px;
-  padding: 9px 10px;
+.feature-correlation-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.2fr) minmax(120px, 1fr) 58px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: #fbfcfd;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 12px;
 }
 
-.correlation-corner,
-.correlation-axis {
-  display: flex;
-  align-items: center;
+.feature-correlation-row span {
   color: var(--muted);
-  background: var(--ink-soft);
+  font-size: 13px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
-.correlation-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+.feature-correlation-row strong {
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 700;
+  text-align: center;
+}
+
+.feature-correlation-track {
+  height: 10px;
+  overflow: hidden;
+  background: #e0e6ec;
+  border-radius: 6px;
+}
+
+.feature-correlation-positive,
+.feature-correlation-negative {
+  height: 100%;
+  border-radius: 6px;
+}
+
+.feature-correlation-positive {
+  margin-left: 50%;
+  background: var(--accent);
+}
+
+.feature-correlation-negative {
+  margin-left: auto;
+  margin-right: 50%;
+  background: var(--warning);
 }
 
 .correlation-insights {
@@ -315,12 +342,14 @@ h1 {
 
 .index-chart-header h3 {
   margin-bottom: 4px;
+  overflow-wrap: anywhere;
 }
 
 .index-chart-header span,
 .chart-range {
   color: var(--muted);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .candle-plot {
@@ -332,6 +361,26 @@ h1 {
 .candle-plot > line {
   stroke: var(--line);
   stroke-width: 2;
+}
+
+.axis-tick line {
+  stroke: #e1e6eb;
+  stroke-width: 1;
+}
+
+.axis-tick text,
+.date-tick {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.date-tick {
+  text-anchor: middle;
+}
+
+.date-axis {
+  stroke: var(--line);
+  stroke-width: 1;
 }
 
 .candle-plot g line {
@@ -386,6 +435,7 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  overflow-wrap: anywhere;
 }
 
 .chart-range span:nth-child(2) {
@@ -460,6 +510,7 @@ h1 {
   margin-top: 4px;
   color: var(--muted);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .move-bar {
@@ -471,6 +522,7 @@ h1 {
 .market-values {
   min-width: 150px;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .change-positive {
@@ -557,6 +609,10 @@ h1 {
   cursor: pointer;
 }
 
+.news-toggle span {
+  overflow-wrap: anywhere;
+}
+
 .news-toggle small {
   display: block;
   margin-top: 5px;
@@ -627,6 +683,10 @@ h1 {
   }
 
   .summary-bar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-correlation-row {
     grid-template-columns: 1fr;
   }
 
