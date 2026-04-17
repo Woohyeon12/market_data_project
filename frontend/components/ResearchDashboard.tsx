@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   fallbackMarkets,
   fallbackReport,
@@ -48,6 +48,10 @@ function formatCompactUsd(value: number) {
 }
 
 function formatMarketPrice(item: MarketInstrument) {
+  if (item.category === "Government Bonds" || item.currency === "Yield") {
+    return `${item.price.toFixed(2)}%`;
+  }
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: item.currency,
@@ -269,6 +273,24 @@ function formatNewsTime(value?: string | null) {
   return parsed.toLocaleString();
 }
 
+function correlationColor(value: number) {
+  const opacity = Math.min(Math.abs(value), 1);
+
+  if (value > 0) {
+    return `rgba(14, 138, 115, ${0.12 + opacity * 0.78})`;
+  }
+
+  if (value < 0) {
+    return `rgba(178, 58, 72, ${0.12 + opacity * 0.78})`;
+  }
+
+  return "rgba(104, 113, 123, 0.16)";
+}
+
+function correlationTextColor(value: number) {
+  return Math.abs(value) > 0.55 ? "#ffffff" : "var(--foreground)";
+}
+
 export function ResearchDashboard() {
   const [report, setReport] = useState<ResearchReport>(fallbackReport);
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
@@ -311,6 +333,7 @@ export function ResearchDashboard() {
   const filteredNews = report.news.filter((item) => {
     return newsFilter === "all" || item.sentiment === newsFilter;
   });
+  const chartSet = [...markets.index_charts, ...markets.bond_charts];
 
   return (
     <main className="page">
@@ -431,8 +454,8 @@ export function ResearchDashboard() {
                 RSI
               </label>
             </div>
-            <div className="index-chart-grid" aria-label="Major index price plots">
-              {markets.index_charts.map((chart) => {
+            <div className="index-chart-grid" aria-label="Major market and bond plots">
+              {chartSet.map((chart) => {
                 const visiblePoints = visibleChartPoints(chart, chartRange);
                 const visibleChart = { ...chart, points: visiblePoints };
                 const geometry = chartGeometry(visiblePoints, chartSize);
@@ -555,6 +578,53 @@ export function ResearchDashboard() {
               ))}
             </div>
             <p className="disclaimer">{markets.disclaimer}</p>
+          </div>
+
+          <div className="panel">
+            <h2>Cross-Asset Correlation</h2>
+            <p className="source-label">
+              {markets.correlations.lookback_days} trading days - {markets.correlations.data_source}
+            </p>
+            <div
+              className="correlation-grid"
+              aria-label="Cross asset correlation heatmap"
+              style={{
+                gridTemplateColumns: `minmax(110px, 1.2fr) repeat(${markets.correlations.assets.length}, minmax(74px, 1fr))`,
+              }}
+            >
+              <div className="correlation-corner">Asset</div>
+              {markets.correlations.assets.map((asset) => (
+                <div className="correlation-axis" key={`x-${asset}`}>{asset}</div>
+              ))}
+              {markets.correlations.assets.map((yAsset) => (
+                <Fragment key={`row-${yAsset}`}>
+                  <div className="correlation-axis" key={`y-${yAsset}`}>{yAsset}</div>
+                  {markets.correlations.assets.map((xAsset) => {
+                    const value = markets.correlations.matrix.find((cell) => {
+                      return cell.x === xAsset && cell.y === yAsset;
+                    })?.value ?? 0;
+
+                    return (
+                      <div
+                        className="correlation-cell"
+                        key={`${xAsset}-${yAsset}`}
+                        style={{
+                          background: correlationColor(value),
+                          color: correlationTextColor(value),
+                        }}
+                      >
+                        {value.toFixed(2)}
+                      </div>
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </div>
+            <ul className="correlation-insights">
+              {markets.correlations.insights.map((insight) => (
+                <li key={insight}>{insight}</li>
+              ))}
+            </ul>
           </div>
 
           <div className="panel">

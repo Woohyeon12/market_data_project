@@ -60,10 +60,26 @@ export type IndexChart = {
   data_source: string;
 };
 
+export type CorrelationCell = {
+  x: string;
+  y: string;
+  value: number;
+};
+
+export type CorrelationAnalysis = {
+  lookback_days: number;
+  assets: string[];
+  matrix: CorrelationCell[];
+  insights: string[];
+  data_source: string;
+};
+
 export type MarketsOverview = {
   generated_at: string;
   instruments: MarketInstrument[];
   index_charts: IndexChart[];
+  bond_charts: IndexChart[];
+  correlations: CorrelationAnalysis;
   summary: string[];
   disclaimer: string;
 };
@@ -129,6 +145,13 @@ export const fallbackMarkets: MarketsOverview = {
     { symbol: "^GSPC", name: "S&P 500", category: "Indices", market: "United States", currency: "USD", price: 5200, change_pct: 0, data_source: "Local fallback" },
     { symbol: "^KS11", name: "KOSPI", category: "Indices", market: "South Korea", currency: "KRW", price: 2700, change_pct: 0, data_source: "Local fallback" },
     { symbol: "XAUUSD=X", name: "Gold Spot", category: "Commodities", market: "Global", currency: "USD", price: 2300, change_pct: 0, data_source: "Local fallback" },
+    { symbol: "GC=F", name: "Gold Futures", category: "Commodities", market: "Global", currency: "USD", price: 2300, change_pct: 0, data_source: "Local fallback" },
+    { symbol: "^TNX", name: "US 10Y Treasury Yield", category: "Government Bonds", market: "United States", currency: "USD", price: 4.5, change_pct: 0, data_source: "Local fallback" },
+    { symbol: "^TYX", name: "US 30Y Treasury Yield", category: "Government Bonds", market: "United States", currency: "USD", price: 4.7, change_pct: 0, data_source: "Local fallback" },
+    { symbol: "^FVX", name: "US 5Y Treasury Yield", category: "Government Bonds", market: "United States", currency: "USD", price: 4.3, change_pct: 0, data_source: "Local fallback" },
+    { symbol: "JP10YT=XX", name: "Japan 10Y Government Bond Yield", category: "Government Bonds", market: "Japan", currency: "Yield", price: 2.4, change_pct: 0, data_source: "Local fallback" },
+    { symbol: "DE10YT=XX", name: "Germany 10Y Bund Yield", category: "Government Bonds", market: "Germany", currency: "Yield", price: 2.7, change_pct: 0, data_source: "Local fallback" },
+    { symbol: "GB10YT=XX", name: "UK 10Y Gilt Yield", category: "Government Bonds", market: "United Kingdom", currency: "Yield", price: 4.6, change_pct: 0, data_source: "Local fallback" },
   ],
   index_charts: [
     { symbol: "BTC-USD", name: "Bitcoin", currency: "USD", data_source: "Local fallback", points: [
@@ -176,7 +199,83 @@ export const fallbackMarkets: MarketsOverview = {
       { date: "Fallback 6", open: 39000, high: 40097, low: 39303, close: 39700 },
       { date: "Fallback 7", open: 39700, high: 40602, low: 39798, close: 40200 },
     ] },
+    { symbol: "GC=F", name: "Gold Futures", currency: "USD", data_source: "Local fallback", points: [
+      { date: "Fallback 1", open: 2288, high: 2323, low: 2277, close: 2300 },
+      { date: "Fallback 2", open: 2300, high: 2348, low: 2302, close: 2325 },
+      { date: "Fallback 3", open: 2325, high: 2333, low: 2287, close: 2310 },
+      { date: "Fallback 4", open: 2310, high: 2374, low: 2327, close: 2350 },
+      { date: "Fallback 5", open: 2350, high: 2404, low: 2356, close: 2380 },
+      { date: "Fallback 6", open: 2380, high: 2429, low: 2381, close: 2405 },
+      { date: "Fallback 7", open: 2405, high: 2414, low: 2366, close: 2390 },
+    ] },
   ],
+  bond_charts: [
+    { symbol: "^TNX", name: "US 10Y Treasury Yield", currency: "Yield", data_source: "Local fallback", points: [
+      { date: "Fallback 1", open: 4.08, high: 4.14, low: 4.06, close: 4.1 },
+      { date: "Fallback 2", open: 4.1, high: 4.24, low: 4.16, close: 4.2 },
+      { date: "Fallback 3", open: 4.2, high: 4.32, low: 4.24, close: 4.28 },
+      { date: "Fallback 4", open: 4.28, high: 4.39, low: 4.31, close: 4.35 },
+      { date: "Fallback 5", open: 4.35, high: 4.35, low: 4.27, close: 4.31 },
+      { date: "Fallback 6", open: 4.31, high: 4.46, low: 4.38, close: 4.42 },
+      { date: "Fallback 7", open: 4.42, high: 4.55, low: 4.46, close: 4.5 },
+    ] },
+    { symbol: "^TYX", name: "US 30Y Treasury Yield", currency: "Yield", data_source: "Local fallback", points: [
+      { date: "Fallback 1", open: 4.28, high: 4.34, low: 4.26, close: 4.3 },
+      { date: "Fallback 2", open: 4.3, high: 4.44, low: 4.36, close: 4.4 },
+      { date: "Fallback 3", open: 4.4, high: 4.52, low: 4.44, close: 4.48 },
+      { date: "Fallback 4", open: 4.48, high: 4.6, low: 4.51, close: 4.56 },
+      { date: "Fallback 5", open: 4.56, high: 4.57, low: 4.47, close: 4.52 },
+      { date: "Fallback 6", open: 4.52, high: 4.66, low: 4.57, close: 4.62 },
+      { date: "Fallback 7", open: 4.62, high: 4.75, low: 4.65, close: 4.7 },
+    ] },
+    { symbol: "JP10YT=XX", name: "Japan 10Y Government Bond Yield", currency: "Yield", data_source: "Local fallback", points: [
+      { date: "Fallback 1", open: 1.29, high: 1.31, low: 1.27, close: 1.3 },
+      { date: "Fallback 2", open: 1.3, high: 1.47, low: 1.43, close: 1.45 },
+      { date: "Fallback 3", open: 1.45, high: 1.62, low: 1.58, close: 1.6 },
+      { date: "Fallback 4", open: 1.6, high: 1.77, low: 1.72, close: 1.75 },
+      { date: "Fallback 5", open: 1.75, high: 1.92, low: 1.87, close: 1.9 },
+      { date: "Fallback 6", open: 1.9, high: 2.07, low: 2.02, close: 2.05 },
+      { date: "Fallback 7", open: 2.05, high: 2.23, low: 2.17, close: 2.2 },
+    ] },
+    { symbol: "DE10YT=XX", name: "Germany 10Y Bund Yield", currency: "Yield", data_source: "Local fallback", points: [
+      { date: "Fallback 1", open: 2.09, high: 2.12, low: 2.07, close: 2.1 },
+      { date: "Fallback 2", open: 2.1, high: 2.2, low: 2.16, close: 2.18 },
+      { date: "Fallback 3", open: 2.18, high: 2.27, low: 2.22, close: 2.25 },
+      { date: "Fallback 4", open: 2.25, high: 2.36, low: 2.31, close: 2.34 },
+      { date: "Fallback 5", open: 2.34, high: 2.44, low: 2.39, close: 2.42 },
+      { date: "Fallback 6", open: 2.42, high: 2.52, low: 2.47, close: 2.5 },
+      { date: "Fallback 7", open: 2.5, high: 2.65, low: 2.59, close: 2.62 },
+    ] },
+    { symbol: "GB10YT=XX", name: "UK 10Y Gilt Yield", currency: "Yield", data_source: "Local fallback", points: [
+      { date: "Fallback 1", open: 3.78, high: 3.84, low: 3.76, close: 3.8 },
+      { date: "Fallback 2", open: 3.8, high: 3.94, low: 3.86, close: 3.9 },
+      { date: "Fallback 3", open: 3.9, high: 4.09, low: 4.01, close: 4.05 },
+      { date: "Fallback 4", open: 4.05, high: 4.22, low: 4.13, close: 4.18 },
+      { date: "Fallback 5", open: 4.18, high: 4.34, low: 4.26, close: 4.3 },
+      { date: "Fallback 6", open: 4.3, high: 4.46, low: 4.38, close: 4.42 },
+      { date: "Fallback 7", open: 4.42, high: 4.56, low: 4.48, close: 4.52 },
+    ] },
+  ],
+  correlations: {
+    lookback_days: 252,
+    assets: ["Bitcoin", "S&P 500", "US 10Y Treasury Yield"],
+    matrix: [
+      { x: "Bitcoin", y: "Bitcoin", value: 1 },
+      { x: "S&P 500", y: "Bitcoin", value: 0.35 },
+      { x: "US 10Y Treasury Yield", y: "Bitcoin", value: -0.12 },
+      { x: "Bitcoin", y: "S&P 500", value: 0.35 },
+      { x: "S&P 500", y: "S&P 500", value: 1 },
+      { x: "US 10Y Treasury Yield", y: "S&P 500", value: -0.25 },
+      { x: "Bitcoin", y: "US 10Y Treasury Yield", value: -0.12 },
+      { x: "S&P 500", y: "US 10Y Treasury Yield", value: -0.25 },
+      { x: "US 10Y Treasury Yield", y: "US 10Y Treasury Yield", value: 1 },
+    ],
+    insights: [
+      "Correlation analysis is waiting for backend data.",
+      "Fallback values are placeholders for layout continuity.",
+    ],
+    data_source: "Local fallback",
+  },
   summary: [
     "Global market overview is waiting for backend data.",
     "Fallback prices are placeholders for layout continuity.",

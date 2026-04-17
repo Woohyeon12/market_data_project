@@ -37,6 +37,20 @@ class IndexChart(BaseModel):
     data_source: str = "Local fallback"
 
 
+class CorrelationCell(BaseModel):
+    x: str
+    y: str
+    value: float
+
+
+class CorrelationAnalysis(BaseModel):
+    lookback_days: int
+    assets: list[str]
+    matrix: list[CorrelationCell]
+    insights: list[str]
+    data_source: str = "Local fallback"
+
+
 class NewsItem(BaseModel):
     title: str
     source: str
@@ -68,5 +82,7 @@ class MarketsOverview(BaseModel):
     generated_at: datetime
     instruments: list[MarketInstrument]
     index_charts: list[IndexChart]
+    bond_charts: list[IndexChart]
+    correlations: CorrelationAnalysis
     summary: list[str]
     disclaimer: str
