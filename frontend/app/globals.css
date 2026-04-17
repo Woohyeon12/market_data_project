@@ -175,6 +175,59 @@ h1 {
   margin-bottom: 18px;
 }
 
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: #f2f5f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.chart-controls > div {
+  display: grid;
+  gap: 6px;
+}
+
+.chart-controls span,
+.chart-controls label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chart-controls label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 34px;
+  color: var(--foreground);
+}
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmented-control button {
+  padding: 7px 10px;
+  color: var(--foreground);
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.segmented-control .control-active {
+  color: #ffffff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
 .index-chart {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -216,6 +269,36 @@ h1 {
 .candle-plot rect {
   fill: currentColor;
   rx: 2px;
+}
+
+.bollinger-line,
+.moving-average-line,
+.rsi-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bollinger-line {
+  stroke: #586f7c;
+  stroke-width: 1.2;
+  stroke-dasharray: 4 4;
+}
+
+.moving-average-line {
+  stroke: #f2a541;
+  stroke-width: 1.5;
+}
+
+.rsi-line {
+  stroke: #6f7bd9;
+  stroke-width: 1.4;
+}
+
+.rsi-guide {
+  stroke: #c6ccd7;
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
 }
 
 .candle-positive {

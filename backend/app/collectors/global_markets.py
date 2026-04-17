@@ -16,6 +16,7 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 MIN_HISTORY_POINTS = 1800
 
 TRACKED_INSTRUMENTS = [
+    ("BTC-USD", "Bitcoin", "Crypto", "Global", "USD", 65000.0, 0.0),
     ("AAPL", "Apple", "US Stocks", "United States", "USD", 190.0, 0.0),
     ("MSFT", "Microsoft", "US Stocks", "United States", "USD", 420.0, 0.0),
     ("NVDA", "NVIDIA", "US Stocks", "United States", "USD", 900.0, 0.0),
@@ -34,6 +35,7 @@ TRACKED_INSTRUMENTS = [
 ]
 
 TRACKED_INDEX_CHARTS = [
+    ("BTC-USD", "Bitcoin", "USD", [62000, 63500, 65000, 64200, 66800, 69000, 70500, 69800]),
     ("^GSPC", "S&P 500", "USD", [5000, 5070, 5120, 5090, 5180, 5240, 5310, 5275]),
     ("^IXIC", "Nasdaq Composite", "USD", [15800, 16050, 16240, 16120, 16480, 16810, 17050, 16920]),
     ("^KS11", "KOSPI", "KRW", [2550, 2585, 2610, 2590, 2640, 2675, 2700, 2688]),

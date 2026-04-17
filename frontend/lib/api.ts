@@ -117,6 +117,7 @@ export const fallbackReport: ResearchReport = {
 export const fallbackMarkets: MarketsOverview = {
   generated_at: new Date().toISOString(),
   instruments: [
+    { symbol: "BTC-USD", name: "Bitcoin", category: "Crypto", market: "Global", currency: "USD", price: 65000, change_pct: 0, data_source: "Local fallback" },
     { symbol: "AAPL", name: "Apple", category: "US Stocks", market: "United States", currency: "USD", price: 190, change_pct: 0, data_source: "Local fallback" },
     { symbol: "MSFT", name: "Microsoft", category: "US Stocks", market: "United States", currency: "USD", price: 420, change_pct: 0, data_source: "Local fallback" },
     { symbol: "NVDA", name: "NVIDIA", category: "US Stocks", market: "United States", currency: "USD", price: 900, change_pct: 0, data_source: "Local fallback" },
@@ -127,6 +128,15 @@ export const fallbackMarkets: MarketsOverview = {
     { symbol: "XAUUSD=X", name: "Gold Spot", category: "Commodities", market: "Global", currency: "USD", price: 2300, change_pct: 0, data_source: "Local fallback" },
   ],
   index_charts: [
+    { symbol: "BTC-USD", name: "Bitcoin", currency: "USD", data_source: "Local fallback", points: [
+      { date: "Fallback 1", open: 61690, high: 62620, low: 61380, close: 62000 },
+      { date: "Fallback 2", open: 62000, high: 64135, low: 62865, close: 63500 },
+      { date: "Fallback 3", open: 63500, high: 65650, low: 64350, close: 65000 },
+      { date: "Fallback 4", open: 65000, high: 64842, low: 63558, close: 64200 },
+      { date: "Fallback 5", open: 64200, high: 67468, low: 66132, close: 66800 },
+      { date: "Fallback 6", open: 66800, high: 69690, low: 68310, close: 69000 },
+      { date: "Fallback 7", open: 69000, high: 71205, low: 69795, close: 70500 },
+    ] },
     { symbol: "^GSPC", name: "S&P 500", currency: "USD", data_source: "Local fallback", points: [
       { date: "Fallback 1", open: 4975, high: 5050, low: 4950, close: 5000 },
       { date: "Fallback 2", open: 5000, high: 5121, low: 5019, close: 5070 },

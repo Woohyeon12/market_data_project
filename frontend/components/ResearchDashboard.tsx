@@ -13,6 +13,23 @@ import {
   type ResearchReport,
 } from "../lib/api";
 
+const RANGE_OPTIONS = [
+  { label: "6M", value: "6m", days: 183 },
+  { label: "1Y", value: "1y", days: 365 },
+  { label: "3Y", value: "3y", days: 365 * 3 },
+  { label: "5Y", value: "5y", days: 365 * 5 },
+  { label: "10Y", value: "10y", days: 365 * 10 },
+  { label: "All", value: "all", days: null },
+];
+
+const CHART_SIZES = {
+  compact: { label: "Compact", height: 96, maxPoints: 90 },
+  medium: { label: "Medium", height: 128, maxPoints: 140 },
+  large: { label: "Large", height: 176, maxPoints: 220 },
+};
+
+type ChartSize = keyof typeof CHART_SIZES;
+
 function formatUsd(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -68,34 +85,141 @@ function chartChangePct(chart: IndexChart) {
   return first ? ((last - first) / first) * 100 : 0;
 }
 
-function sampledChartPoints(chart: IndexChart, maxPoints = 120) {
-  if (chart.points.length <= maxPoints) {
+function visibleChartPoints(chart: IndexChart, rangeValue: string) {
+  const selected = RANGE_OPTIONS.find((option) => option.value === rangeValue);
+
+  if (!selected?.days) {
     return chart.points;
   }
 
-  const step = Math.ceil(chart.points.length / maxPoints);
-  return chart.points.filter((_, index) => index % step === 0);
+  return chart.points.slice(-selected.days);
 }
 
-function candleGeometry(chart: IndexChart) {
+function sampledChartPoints(points: IndexChart["points"], maxPoints: number) {
+  if (points.length <= maxPoints) {
+    return points;
+  }
+
+  const step = Math.ceil(points.length / maxPoints);
+  return points.filter((_, index) => index % step === 0);
+}
+
+function calculateSma(values: number[], period: number) {
+  return values.map((_, index) => {
+    if (index < period - 1) {
+      return null;
+    }
+
+    const slice = values.slice(index - period + 1, index + 1);
+    return slice.reduce((total, value) => total + value, 0) / period;
+  });
+}
+
+function calculateBollinger(values: number[], period = 20, deviation = 2) {
+  const sma = calculateSma(values, period);
+
+  return values.map((_, index) => {
+    const middle = sma[index];
+
+    if (middle === null || index < period - 1) {
+      return { upper: null, middle: null, lower: null };
+    }
+
+    const slice = values.slice(index - period + 1, index + 1);
+    const variance = slice.reduce((total, value) => total + (value - middle) ** 2, 0) / period;
+    const band = Math.sqrt(variance) * deviation;
+
+    return {
+      upper: middle + band,
+      middle,
+      lower: middle - band,
+    };
+  });
+}
+
+function calculateRsi(values: number[], period = 14) {
+  return values.map((_, index) => {
+    if (index < period) {
+      return null;
+    }
+
+    const slice = values.slice(index - period + 1, index + 1);
+    let gains = 0;
+    let losses = 0;
+
+    slice.forEach((value, sliceIndex) => {
+      if (sliceIndex === 0) {
+        return;
+      }
+
+      const change = value - slice[sliceIndex - 1];
+      if (change >= 0) {
+        gains += change;
+      } else {
+        losses += Math.abs(change);
+      }
+    });
+
+    const averageGain = gains / period;
+    const averageLoss = losses / period;
+
+    if (averageLoss === 0) {
+      return 100;
+    }
+
+    const relativeStrength = averageGain / averageLoss;
+    return 100 - 100 / (1 + relativeStrength);
+  });
+}
+
+function scaledPath(
+  values: Array<number | null>,
+  yForValue: (value: number) => number,
+  slot: number,
+) {
+  return values
+    .map((value, index) => {
+      if (value === null) {
+        return "";
+      }
+
+      const command = values.slice(0, index).some((previous) => previous !== null) ? "L" : "M";
+      return `${command} ${slot * index + slot / 2} ${yForValue(value)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+function chartGeometry(points: IndexChart["points"], size: ChartSize) {
   const width = 280;
-  const height = 96;
-  const points = sampledChartPoints(chart);
+  const height = CHART_SIZES[size].height;
+  const sampledPoints = sampledChartPoints(points, CHART_SIZES[size].maxPoints);
+  const closes = sampledPoints.map((point) => point.close);
+  const bollinger = calculateBollinger(closes);
+  const sma20 = calculateSma(closes, 20);
+  const rsi14 = calculateRsi(closes);
   const highs = points.map((point) => point.high);
   const lows = points.map((point) => point.low);
-  const min = Math.min(...lows);
-  const max = Math.max(...highs);
+  const bandValues = bollinger
+    .flatMap((band) => [band.upper, band.lower])
+    .filter((value): value is number => value !== null);
+  const min = Math.min(...lows, ...bandValues);
+  const max = Math.max(...highs, ...bandValues);
   const range = max - min || 1;
-  const slot = points.length ? width / points.length : width;
+  const slot = sampledPoints.length ? width / sampledPoints.length : width;
   const bodyWidth = Math.max(1.5, Math.min(8, slot * 0.58));
+  const priceHeight = Math.round(height * 0.72);
+  const rsiTop = priceHeight + 12;
+  const rsiHeight = Math.max(36, height - rsiTop);
+  const priceY = (value: number) => priceHeight - ((value - min) / range) * priceHeight;
+  const rsiY = (value: number) => rsiTop + rsiHeight - (value / 100) * rsiHeight;
 
-  return points.map((point, index) => {
+  const candles = sampledPoints.map((point, index) => {
     const centerX = slot * index + slot / 2;
-    const y = (value: number) => height - ((value - min) / range) * height;
-    const openY = y(point.open);
-    const closeY = y(point.close);
-    const highY = y(point.high);
-    const lowY = y(point.low);
+    const openY = priceY(point.open);
+    const closeY = priceY(point.close);
+    const highY = priceY(point.high);
+    const lowY = priceY(point.low);
     const bodyTop = Math.min(openY, closeY);
     const bodyHeight = Math.max(2, Math.abs(closeY - openY));
 
@@ -111,6 +235,21 @@ function candleGeometry(chart: IndexChart) {
       bodyHeight,
     };
   });
+
+  return {
+    candles,
+    upperPath: scaledPath(bollinger.map((band) => band.upper), priceY, slot),
+    middlePath: scaledPath(sma20, priceY, slot),
+    lowerPath: scaledPath(bollinger.map((band) => band.lower), priceY, slot),
+    rsiPath: scaledPath(rsi14, rsiY, slot),
+    height,
+    priceBaseline: priceHeight,
+    rsiTop,
+    rsiHeight,
+    rsi30: rsiY(30),
+    rsi70: rsiY(70),
+    sampledCount: sampledPoints.length,
+  };
 }
 
 function newsKey(item: NewsItem) {
@@ -122,6 +261,10 @@ export function ResearchDashboard() {
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
   const [newsFilter, setNewsFilter] = useState("all");
   const [selectedNewsKey, setSelectedNewsKey] = useState<string | null>(null);
+  const [chartRange, setChartRange] = useState("10y");
+  const [chartSize, setChartSize] = useState<ChartSize>("medium");
+  const [showBollinger, setShowBollinger] = useState(true);
+  const [showRsi, setShowRsi] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -227,11 +370,62 @@ export function ResearchDashboard() {
             <p className="source-label">
               Updated {new Date(markets.generated_at).toLocaleString()}
             </p>
+            <div className="chart-controls" aria-label="Chart controls">
+              <div>
+                <span>Range</span>
+                <div className="segmented-control">
+                  {RANGE_OPTIONS.map((option) => (
+                    <button
+                      className={chartRange === option.value ? "control-active" : ""}
+                      key={option.value}
+                      onClick={() => setChartRange(option.value)}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span>Size</span>
+                <div className="segmented-control">
+                  {Object.entries(CHART_SIZES).map(([value, option]) => (
+                    <button
+                      className={chartSize === value ? "control-active" : ""}
+                      key={value}
+                      onClick={() => setChartSize(value as ChartSize)}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label>
+                <input
+                  checked={showBollinger}
+                  onChange={(event) => setShowBollinger(event.target.checked)}
+                  type="checkbox"
+                />
+                Bollinger
+              </label>
+              <label>
+                <input
+                  checked={showRsi}
+                  onChange={(event) => setShowRsi(event.target.checked)}
+                  type="checkbox"
+                />
+                RSI
+              </label>
+            </div>
             <div className="index-chart-grid" aria-label="Major index price plots">
               {markets.index_charts.map((chart) => {
-                const changePct = chartChangePct(chart);
-                const firstPoint = chart.points[0];
-                const lastPoint = chart.points[chart.points.length - 1];
+                const visiblePoints = visibleChartPoints(chart, chartRange);
+                const visibleChart = { ...chart, points: visiblePoints };
+                const geometry = chartGeometry(visiblePoints, chartSize);
+                const changePct = chartChangePct(visibleChart);
+                const firstPoint = visiblePoints[0];
+                const lastPoint = visiblePoints[visiblePoints.length - 1];
 
                 return (
                   <article className="index-chart" key={chart.symbol}>
@@ -246,12 +440,27 @@ export function ResearchDashboard() {
                     </div>
                     <svg
                       className="candle-plot"
-                      viewBox="0 0 280 96"
+                      style={{ height: `${geometry.height + 14}px` }}
+                      viewBox={`0 0 280 ${geometry.height}`}
                       role="img"
-                      aria-label={`${chart.name} ten year candlestick plot`}
+                      aria-label={`${chart.name} candlestick plot with technical indicators`}
                     >
-                      <line x1="0" y1="92" x2="280" y2="92" />
-                      {candleGeometry(chart).map((candle) => (
+                      <line x1="0" y1={geometry.priceBaseline} x2="280" y2={geometry.priceBaseline} />
+                      {showRsi ? (
+                        <>
+                          <line className="rsi-guide" x1="0" y1={geometry.rsi70} x2="280" y2={geometry.rsi70} />
+                          <line className="rsi-guide" x1="0" y1={geometry.rsi30} x2="280" y2={geometry.rsi30} />
+                          <path className="rsi-line" d={geometry.rsiPath} />
+                        </>
+                      ) : null}
+                      {showBollinger ? (
+                        <>
+                          <path className="bollinger-line" d={geometry.upperPath} />
+                          <path className="moving-average-line" d={geometry.middlePath} />
+                          <path className="bollinger-line" d={geometry.lowerPath} />
+                        </>
+                      ) : null}
+                      {geometry.candles.map((candle) => (
                         <g
                           className={candle.rising ? "candle-positive" : "candle-negative"}
                           key={candle.key}
@@ -273,7 +482,9 @@ export function ResearchDashboard() {
                     </svg>
                     <div className="chart-range">
                       <span>{firstPoint?.date ?? "Start"}</span>
-                      <span>{chart.points.length.toLocaleString()} DB rows</span>
+                      <span>
+                        {visiblePoints.length.toLocaleString()} visible / {chart.points.length.toLocaleString()} DB rows
+                      </span>
                       <span>{lastPoint?.date ?? "Latest"}</span>
                     </div>
                   </article>
