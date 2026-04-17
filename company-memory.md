@@ -35,6 +35,7 @@ Build a Bitcoin research-focused financial intelligence company around this proj
 
 ## Latest Operating Note
 
+- 2026-04-17 23:10 KST: Shifted near-term meetings to development and design only. Development will keep adding useful variables, indicators, research products, and interactions; design will directly inspect the dashboard and tighten layout/readability. Current implementation started with an interactive feature-correlation workbench.
 - 2026-04-17 22:28 KST: Added lead-lag feature correlation planning and AI-style research commentary requirements after the user requested both.
 - 2026-04-17 22:12 KST: Heartbeat operations check confirmed a clean git tree, running Docker services, and a live 12-feature/144-cell engineered correlation heatmap on the dashboard.
 - 2026-04-17 21:58 KST: Updated correlation display from target-only bars to a multivariate engineered-feature heatmap while keeping BTC return as a key variable.

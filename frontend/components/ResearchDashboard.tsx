@@ -11,6 +11,7 @@ import {
   type MarketsOverview,
   type NewsItem,
   type ResearchReport,
+  type CorrelationCell,
 } from "../lib/api";
 
 const RANGE_OPTIONS = [
@@ -344,6 +345,34 @@ function correlationTextColor(value: number) {
   return Math.abs(value) > 0.55 ? "#ffffff" : "var(--foreground)";
 }
 
+function correlationTone(value: number) {
+  if (Math.abs(value) < 0.15) {
+    return "Low signal";
+  }
+
+  if (Math.abs(value) < 0.35) {
+    return "Watch";
+  }
+
+  if (Math.abs(value) < 0.55) {
+    return "Meaningful";
+  }
+
+  return "High priority";
+}
+
+function correlationAction(cell: CorrelationCell) {
+  if (Math.abs(cell.value) < 0.15) {
+    return "Keep as context until the signal strengthens.";
+  }
+
+  if (cell.value > 0) {
+    return "Track as a same-direction macro or risk appetite input.";
+  }
+
+  return "Track as a possible hedge, stress, or regime-warning input.";
+}
+
 export function ResearchDashboard() {
   const [report, setReport] = useState<ResearchReport>(fallbackReport);
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
@@ -353,6 +382,7 @@ export function ResearchDashboard() {
   const [chartSize, setChartSize] = useState<ChartSize>("medium");
   const [showBollinger, setShowBollinger] = useState(true);
   const [showRsi, setShowRsi] = useState(true);
+  const [selectedFeature, setSelectedFeature] = useState("BTC return");
 
   useEffect(() => {
     let active = true;
@@ -387,6 +417,20 @@ export function ResearchDashboard() {
     return newsFilter === "all" || item.sentiment === newsFilter;
   });
   const chartSet = [...markets.index_charts, ...markets.bond_charts];
+  const activeFeature = markets.correlations.assets.includes(selectedFeature)
+    ? selectedFeature
+    : markets.correlations.assets[0] ?? "BTC return";
+  const focusedRelationships = markets.correlations.matrix
+    .filter((cell) => cell.y === activeFeature && cell.x !== activeFeature)
+    .sort((first, second) => Math.abs(second.value) - Math.abs(first.value));
+  const topPositiveRelationships = focusedRelationships
+    .filter((cell) => cell.value > 0)
+    .sort((first, second) => second.value - first.value)
+    .slice(0, 3);
+  const topNegativeRelationships = focusedRelationships
+    .filter((cell) => cell.value < 0)
+    .sort((first, second) => first.value - second.value)
+    .slice(0, 3);
 
   return (
     <main className="page">
@@ -650,6 +694,55 @@ export function ResearchDashboard() {
             <p className="source-label">
               {markets.correlations.lookback_days} trading days - {markets.correlations.data_source}
             </p>
+            <div className="feature-workbench" aria-label="Feature relationship workbench">
+              <div className="feature-picker">
+                <span>Focus variable</span>
+                <div>
+                  {markets.correlations.assets.map((asset) => (
+                    <button
+                      className={asset === activeFeature ? "feature-active" : ""}
+                      key={asset}
+                      onClick={() => setSelectedFeature(asset)}
+                      type="button"
+                    >
+                      {asset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="relationship-grid">
+                <section>
+                  <h3>Positive drivers</h3>
+                  {(topPositiveRelationships.length ? topPositiveRelationships : focusedRelationships.slice(0, 3)).map((cell) => (
+                    <article className="relationship-card" key={`positive-${cell.x}-${cell.y}`}>
+                      <div>
+                        <strong>{cell.x}</strong>
+                        <span>{correlationTone(cell.value)}</span>
+                      </div>
+                      <b style={{ background: correlationColor(cell.value), color: correlationTextColor(cell.value) }}>
+                        {cell.value.toFixed(2)}
+                      </b>
+                      <p>{correlationAction(cell)}</p>
+                    </article>
+                  ))}
+                </section>
+                <section>
+                  <h3>Negative drivers</h3>
+                  {(topNegativeRelationships.length ? topNegativeRelationships : focusedRelationships.slice(-3)).map((cell) => (
+                    <article className="relationship-card" key={`negative-${cell.x}-${cell.y}`}>
+                      <div>
+                        <strong>{cell.x}</strong>
+                        <span>{correlationTone(cell.value)}</span>
+                      </div>
+                      <b style={{ background: correlationColor(cell.value), color: correlationTextColor(cell.value) }}>
+                        {cell.value.toFixed(2)}
+                      </b>
+                      <p>{correlationAction(cell)}</p>
+                    </article>
+                  ))}
+                </section>
+              </div>
+            </div>
             <div className="correlation-scroll">
               <div
                 className="correlation-grid"
@@ -674,7 +767,11 @@ export function ResearchDashboard() {
 
                       return (
                         <div
-                          className="correlation-cell"
+                          className={`correlation-cell ${
+                            xAsset === activeFeature || yAsset === activeFeature
+                              ? "correlation-cell-focused"
+                              : ""
+                          }`}
                           key={`${xAsset}-${yAsset}`}
                           style={{
                             background: correlationColor(value),
