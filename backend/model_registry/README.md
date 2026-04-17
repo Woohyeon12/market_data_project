@@ -33,6 +33,15 @@ Financial statement scoring features:
 - `fundamental_roa`
 - `fundamental_debt_to_equity`
 - `fundamental_fcf_margin`
+- `fundamental_market_cap_b`
+- `fundamental_trailing_pe`
+- `fundamental_forward_pe`
+- `fundamental_price_to_book`
+- `fundamental_price_to_sales`
+- `fundamental_ev_to_ebitda`
+- `fundamental_dividend_yield`
+- `fundamental_beta`
+- `fundamental_target_upside`
 
 Model files can use either a simple `weights` object or a `features` list with optional training-set `mean` and `std` values.
 
@@ -71,7 +80,9 @@ For stock fundamental boosting or bagging scores, use `target: "equity_fundament
     { "name": "fundamental_net_margin", "weight": 0.18 },
     { "name": "fundamental_roe", "weight": 0.08 },
     { "name": "fundamental_debt_to_equity", "weight": -0.35 },
-    { "name": "fundamental_fcf_margin", "weight": 0.16 }
+    { "name": "fundamental_fcf_margin", "weight": 0.16 },
+    { "name": "fundamental_trailing_pe", "weight": -0.04 },
+    { "name": "fundamental_price_to_book", "weight": -0.03 }
   ]
 }
 ```

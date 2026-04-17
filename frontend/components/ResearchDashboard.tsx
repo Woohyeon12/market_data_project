@@ -72,6 +72,9 @@ const FUNDAMENTAL_SORT_OPTIONS = [
   { label: "ROE", value: "fundamental_roe", direction: "desc" },
   { label: "Revenue growth", value: "fundamental_revenue_growth_yoy", direction: "desc" },
   { label: "FCF margin", value: "fundamental_fcf_margin", direction: "desc" },
+  { label: "Market cap", value: "fundamental_market_cap_b", direction: "desc" },
+  { label: "Low PER", value: "fundamental_trailing_pe", direction: "asc" },
+  { label: "Low P/B", value: "fundamental_price_to_book", direction: "asc" },
   { label: "Low leverage", value: "fundamental_debt_to_equity", direction: "asc" },
 ] as const;
 
@@ -457,7 +460,27 @@ function metricDisplayValue(value: number, unit: string) {
     return `${value.toFixed(2)}x`;
   }
 
+  if (unit === "B") {
+    return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}B`;
+  }
+
   return value.toFixed(2);
+}
+
+function fundamentalSortUnit(sort: FundamentalSort) {
+  if (sort === "fundamental_market_cap_b") {
+    return "B";
+  }
+
+  if (
+    sort === "fundamental_debt_to_equity" ||
+    sort === "fundamental_trailing_pe" ||
+    sort === "fundamental_price_to_book"
+  ) {
+    return "x";
+  }
+
+  return "%";
 }
 
 function topStatementPeriods(item: EquityFundamental) {
@@ -556,8 +579,11 @@ export function ResearchDashboard() {
     return option.value === fundamentalSort;
   }) ?? FUNDAMENTAL_SORT_OPTIONS[0];
   const sortedEquityFundamentals = [...equityFundamentals].sort((first, second) => {
-    const firstValue = first.model_features[fundamentalSort] ?? Number.NEGATIVE_INFINITY;
-    const secondValue = second.model_features[fundamentalSort] ?? Number.NEGATIVE_INFINITY;
+    const missingValue = selectedFundamentalSort.direction === "asc"
+      ? Number.POSITIVE_INFINITY
+      : Number.NEGATIVE_INFINITY;
+    const firstValue = first.model_features[fundamentalSort] ?? missingValue;
+    const secondValue = second.model_features[fundamentalSort] ?? missingValue;
 
     if (selectedFundamentalSort.direction === "asc") {
       return firstValue - secondValue;
@@ -639,20 +665,20 @@ export function ResearchDashboard() {
         </div>
 
         <section className="grid" aria-label="Bitcoin research dashboard">
-          <div className="panel" hidden={activePage !== "overview"}>
+          <div className="panel snapshot-panel" hidden={activePage !== "overview"}>
             <h2>Market Snapshot</h2>
             <p className="source-label">Source: {report.market.data_source}</p>
             <div className="metric-row">
               <div className="metric">
-                <div className="metric-label">Price</div>
+                <div className="metric-label">BTC Price</div>
                 <p className="metric-value">{formatUsd(report.market.price_usd)}</p>
               </div>
               <div className="metric">
-                <div className="metric-label">24h Change</div>
+                <div className="metric-label">24h</div>
                 <p className="metric-value">{report.market.change_24h_pct}%</p>
               </div>
               <div className="metric">
-                <div className="metric-label">24h Volume</div>
+                <div className="metric-label">Volume</div>
                 <p className="metric-value">
                   {formatCompactUsd(report.market.volume_24h_usd)}
                 </p>
@@ -900,46 +926,58 @@ export function ResearchDashboard() {
               </div>
             </div>
             <div className="fundamental-grid" aria-label="Equity financial statement summaries">
-              {sortedEquityFundamentals.map((item) => (
-                <article className="fundamental-card" key={item.symbol}>
-                  <div className="fundamental-header">
-                    <div>
-                      <h3>{item.name}</h3>
-                      <span>{item.symbol} - {item.market} - {item.data_source}</span>
-                    </div>
-                    <strong>{item.currency}</strong>
-                  </div>
-                  <div className="fundamental-metrics">
-                    {item.metrics.slice(0, 8).map((metric) => (
-                      <div key={`${item.symbol}-${metric.key}`} title={metric.interpretation}>
-                        <span>{metric.label}</span>
-                        <strong>{metricDisplayValue(metric.value, metric.unit)}</strong>
+              {sortedEquityFundamentals.map((item) => {
+                const sortValue = item.model_features[fundamentalSort];
+
+                return (
+                  <article className="fundamental-card" key={item.symbol}>
+                    <div className="fundamental-header">
+                      <div>
+                        <h3>{item.name}</h3>
+                        <span>{item.symbol} - {item.market} - {item.data_source}</span>
                       </div>
-                    ))}
-                  </div>
-                  <div className="financial-table">
-                    <div className="financial-row financial-row-head">
-                      <span>Fiscal</span>
-                      <span>Revenue</span>
-                      <span>Net income</span>
-                      <span>FCF</span>
-                    </div>
-                    {topStatementPeriods(item).map((period) => (
-                      <div className="financial-row" key={statementKey(item.symbol, period)}>
-                        <span>{period.fiscal_date}</span>
-                        <span>{formatFinancialValue(period.revenue, item.currency)}</span>
-                        <span>{formatFinancialValue(period.net_income, item.currency)}</span>
-                        <span>{formatFinancialValue(period.free_cash_flow, item.currency)}</span>
+                      <div className="fundamental-badges">
+                        <strong>{item.currency}</strong>
+                        <span title={`Current sort: ${selectedFundamentalSort.label}`}>
+                          {selectedFundamentalSort.label}:{" "}
+                          {sortValue === undefined
+                            ? "n/a"
+                            : metricDisplayValue(sortValue, fundamentalSortUnit(fundamentalSort))}
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                  <div className="feature-pills">
-                    {Object.keys(item.model_features).slice(0, 8).map((feature) => (
-                      <span key={`${item.symbol}-${feature}`}>{feature}</span>
-                    ))}
-                  </div>
-                </article>
-              ))}
+                    </div>
+                    <div className="fundamental-metrics">
+                      {item.metrics.slice(0, 8).map((metric) => (
+                        <div key={`${item.symbol}-${metric.key}`} title={metric.interpretation}>
+                          <span>{metric.label}</span>
+                          <strong>{metricDisplayValue(metric.value, metric.unit)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="financial-table">
+                      <div className="financial-row financial-row-head">
+                        <span>Fiscal</span>
+                        <span>Revenue</span>
+                        <span>Net income</span>
+                        <span>FCF</span>
+                      </div>
+                      {topStatementPeriods(item).map((period) => (
+                        <div className="financial-row" key={statementKey(item.symbol, period)}>
+                          <span>{period.fiscal_date}</span>
+                          <span>{formatFinancialValue(period.revenue, item.currency)}</span>
+                          <span>{formatFinancialValue(period.net_income, item.currency)}</span>
+                          <span>{formatFinancialValue(period.free_cash_flow, item.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="feature-pills">
+                      {Object.keys(item.model_features).slice(0, 8).map((feature) => (
+                        <span key={`${item.symbol}-${feature}`}>{feature}</span>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
             {fundamentalModelScores.length ? (
               <div className="fundamental-scoreboard" aria-label="Fundamental model scores">

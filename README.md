@@ -9,6 +9,7 @@ The first version is intentionally small:
 - A scenario model that can later be replaced with a trained model.
 - A Next.js frontend dashboard that reads from the backend.
 - Dockerfiles and docker-compose for local deployment.
+- Large-cap stock coverage across the US, Korea, and Japan with financial statement and valuation ratios.
 
 ## Project Layout
 
@@ -71,7 +72,7 @@ Put enabled JSON model files in `backend/model_registry`.
 
 The backend reads weighted boosting, bagging, or ensemble exports from that folder and evaluates each signal on the latest 504 trading observations, roughly two years. Signals from date T are scored against BTC return on date T+1. The dashboard shows Sharpe ratio, win rate, total return, max drawdown, exposure, and a compact equity curve.
 
-For stock models, use `target: "equity_fundamental_score"` with financial statement features such as `fundamental_revenue_growth_yoy`, `fundamental_net_margin`, `fundamental_roe`, `fundamental_debt_to_equity`, and `fundamental_fcf_margin`. These models score tracked equities from the latest annual financial statement metrics.
+For stock models, use `target: "equity_fundamental_score"` with financial statement and valuation features such as `fundamental_revenue_growth_yoy`, `fundamental_net_margin`, `fundamental_roe`, `fundamental_debt_to_equity`, `fundamental_fcf_margin`, `fundamental_trailing_pe`, `fundamental_price_to_book`, `fundamental_market_cap_b`, and `fundamental_dividend_yield`. These models score tracked equities from the latest annual financial statement and pricing metrics.
 
 See `backend/model_registry/README.md` for the supported feature names and JSON format. User JSON files are ignored by Git by default so private model weights are not pushed accidentally.
 

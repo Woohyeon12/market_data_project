@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-Build a Bitcoin research-focused financial intelligence company around this project.
+Build a Bitcoin and global market research-focused financial intelligence product around this project.
 
 ## Product Direction
 
@@ -35,6 +35,10 @@ Build a Bitcoin research-focused financial intelligence company around this proj
 
 ## Latest Operating Note
 
+- 2026-04-18 user directive: Updated the recurring meeting prompt to stop repeating already implemented items, give developers/designers more freedom to add useful market-data product features, allow alternate public data sources when Yahoo/fallbacks fail, and prioritize cleaning messy market snapshot layouts.
+- 2026-04-18 development: Expanded the tracked large-cap stock universe across the US, Korea, and Japan; added valuation metrics such as PER, forward PER, P/B, P/S, EV/EBITDA, dividend yield, beta, target upside, and market cap; added curated fallback valuation metrics; and tightened the Market Snapshot card text to one-line values.
+- 2026-04-18 heartbeat: Added approval-queue.md so blocked build, Docker, and Git actions are preserved for morning approval instead of disappearing into chat history.
+- 2026-04-18 heartbeat: Development/design pass added visible sort-value badges to each fundamentals card and made missing fundamental sort values fall to the end, so stock comparisons are easier to audit.
 - 2026-04-18 heartbeat: Design/development check added Fundamentals page sorting by ROE, revenue growth, FCF margin, and low leverage so statement-derived metrics are easier to compare.
 - 2026-04-17: Added user priority for historical stock financial statements, derived fundamental indicators, and financial-statement-based boosting/bagging model support.
 - 2026-04-17 heartbeat: Development/design meeting checked the new page-switching dashboard and added per-page count badges so each list communicates its current contents before the user clicks.

@@ -237,19 +237,34 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
+  min-width: 0;
 }
 
 .metric-label {
   margin-bottom: 8px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .metric-value {
   margin: 0;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
-  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snapshot-panel .metric {
+  padding: 12px;
 }
 
 .summary-list,
@@ -579,13 +594,35 @@ h1 {
   overflow-wrap: anywhere;
 }
 
-.fundamental-header > strong {
+.fundamental-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  min-width: 112px;
+}
+
+.fundamental-badges > strong,
+.fundamental-badges > span {
   align-self: start;
   padding: 6px 8px;
-  color: var(--accent-strong);
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.fundamental-badges > strong {
+  align-self: flex-end;
+  color: var(--accent-strong);
+}
+
+.fundamental-badges > span {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .fundamental-metrics {
@@ -1208,6 +1245,21 @@ h1 {
 
   .fundamental-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fundamental-header,
+  .fundamental-badges {
+    align-items: flex-start;
+  }
+
+  .fundamental-header {
+    flex-direction: column;
+  }
+
+  .fundamental-badges {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   .financial-row,

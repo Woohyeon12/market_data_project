@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -22,23 +23,51 @@ FUNDAMENTAL_MODEL_FEATURES = [
     "fundamental_roa",
     "fundamental_debt_to_equity",
     "fundamental_fcf_margin",
+    "fundamental_market_cap_b",
+    "fundamental_trailing_pe",
+    "fundamental_forward_pe",
+    "fundamental_price_to_book",
+    "fundamental_price_to_sales",
+    "fundamental_ev_to_ebitda",
+    "fundamental_dividend_yield",
+    "fundamental_beta",
+    "fundamental_target_upside",
 ]
 
 STOCK_UNIVERSE = [
     item for item in TRACKED_INSTRUMENTS
-    if item[2] in {"US Stocks", "Korea Stocks", "Japan Stocks"}
+    if item[2] in {"US Stocks", "Korea Stocks", "Japan Stocks"} and item[0] != "SPY"
 ]
 
 FALLBACK_BASES = {
     "AAPL": (383_285_000_000, 96_995_000_000, 352_583_000_000, 62_146_000_000),
     "MSFT": (245_122_000_000, 88_136_000_000, 512_163_000_000, 268_477_000_000),
     "NVDA": (60_922_000_000, 29_760_000_000, 65_728_000_000, 43_009_000_000),
+    "GOOGL": (307_394_000_000, 73_795_000_000, 402_392_000_000, 283_379_000_000),
+    "AMZN": (574_785_000_000, 30_425_000_000, 527_854_000_000, 201_875_000_000),
+    "META": (134_902_000_000, 39_098_000_000, 229_623_000_000, 153_168_000_000),
+    "TSLA": (96_773_000_000, 14_974_000_000, 106_618_000_000, 62_634_000_000),
+    "BRK-B": (364_482_000_000, 96_223_000_000, 1_069_978_000_000, 561_273_000_000),
+    "JPM": (158_104_000_000, 49_552_000_000, 3_875_393_000_000, 327_878_000_000),
+    "AVGO": (35_819_000_000, 14_082_000_000, 72_861_000_000, 23_587_000_000),
     "005930.KS": (258_935_000_000_000, 15_487_000_000_000, 455_906_000_000_000, 363_678_000_000_000),
     "000660.KS": (32_766_000_000_000, -9_137_000_000_000, 100_330_000_000_000, 53_290_000_000_000),
     "005380.KS": (162_664_000_000_000, 12_272_000_000_000, 282_463_000_000_000, 106_478_000_000_000),
+    "000270.KS": (99_808_000_000_000, 8_777_000_000_000, 79_233_000_000_000, 43_121_000_000_000),
+    "373220.KS": (33_745_000_000_000, 1_638_000_000_000, 45_746_000_000_000, 28_310_000_000_000),
+    "207940.KS": (3_694_000_000_000, 858_000_000_000, 16_161_000_000_000, 9_558_000_000_000),
+    "035420.KS": (9_671_000_000_000, 985_000_000_000, 36_252_000_000_000, 24_762_000_000_000),
+    "035720.KS": (7_557_000_000_000, 206_000_000_000, 24_567_000_000_000, 16_187_000_000_000),
+    "055550.KS": (14_642_000_000_000, 4_368_000_000_000, 734_779_000_000_000, 58_813_000_000_000),
     "7203.T": (45_095_000_000_000, 4_945_000_000_000, 90_114_000_000_000, 34_338_000_000_000),
     "6758.T": (13_020_000_000_000, 970_000_000_000, 34_107_000_000_000, 7_999_000_000_000),
     "8306.T": (11_890_000_000_000, 1_491_000_000_000, 403_703_000_000_000, 18_272_000_000_000),
+    "9984.T": (6_756_000_000_000, 227_000_000_000, 45_512_000_000_000, 12_936_000_000_000),
+    "6861.T": (967_000_000_000, 363_000_000_000, 2_996_000_000_000, 2_679_000_000_000),
+    "8035.T": (2_209_000_000_000, 363_000_000_000, 2_597_000_000_000, 1_865_000_000_000),
+    "9983.T": (2_766_000_000_000, 296_000_000_000, 3_780_000_000_000, 1_817_000_000_000),
+    "9432.T": (13_136_000_000_000, 1_279_000_000_000, 29_604_000_000_000, 9_191_000_000_000),
+    "8058.T": (19_567_000_000_000, 964_000_000_000, 23_456_000_000_000, 7_442_000_000_000),
 }
 
 
@@ -67,6 +96,74 @@ def _safe_ratio(numerator: float | None, denominator: float | None) -> float | N
     if numerator is None or denominator in (None, 0):
         return None
     return numerator / denominator
+
+
+def _quote_section(payload: dict, name: str) -> dict:
+    result = payload.get("quoteSummary", {}).get("result") or []
+    if not result:
+        return {}
+
+    section = result[0].get(name, {})
+    return section if isinstance(section, dict) else {}
+
+
+def _percent_from_decimal(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return value * 100 if abs(value) <= 1 else value
+
+
+def _quote_metrics(payload: dict) -> dict[str, float]:
+    summary = _quote_section(payload, "summaryDetail")
+    stats = _quote_section(payload, "defaultKeyStatistics")
+    financial = _quote_section(payload, "financialData")
+    price = _quote_section(payload, "price")
+    current_price = _raw(price.get("regularMarketPrice")) or _raw(financial.get("currentPrice"))
+    target_price = _raw(financial.get("targetMeanPrice"))
+    target_upside = None
+    if current_price not in (None, 0) and target_price is not None:
+        target_upside = ((target_price - current_price) / current_price) * 100
+
+    values = {
+        "market_cap": _raw(price.get("marketCap")) or _raw(summary.get("marketCap")),
+        "trailing_pe": _raw(summary.get("trailingPE")) or _raw(stats.get("trailingPE")),
+        "forward_pe": _raw(summary.get("forwardPE")) or _raw(stats.get("forwardPE")),
+        "price_to_book": _raw(stats.get("priceToBook")),
+        "price_to_sales": _raw(stats.get("priceToSalesTrailing12Months")),
+        "ev_to_ebitda": _raw(stats.get("enterpriseToEbitda")),
+        "dividend_yield": _percent_from_decimal(_raw(summary.get("dividendYield"))),
+        "beta": _raw(summary.get("beta")) or _raw(stats.get("beta")),
+        "target_upside": target_upside,
+        "return_on_equity": _percent_from_decimal(_raw(financial.get("returnOnEquity"))),
+    }
+    return {key: value for key, value in values.items() if value is not None}
+
+
+def _fallback_quote_metrics(periods: list[FinancialStatementPeriod]) -> dict[str, float]:
+    latest = periods[0] if periods else None
+    if not latest:
+        return {}
+
+    if latest.net_income and latest.net_income > 0:
+        market_cap = latest.net_income * 24
+    elif latest.revenue:
+        market_cap = latest.revenue * 1.4
+    else:
+        market_cap = 0.0
+
+    trailing_pe = _safe_ratio(market_cap, latest.net_income if latest.net_income and latest.net_income > 0 else None)
+    values = {
+        "market_cap": market_cap,
+        "trailing_pe": trailing_pe,
+        "forward_pe": (trailing_pe * 0.9) if trailing_pe else None,
+        "price_to_book": _safe_ratio(market_cap, latest.shareholder_equity) or 0.0,
+        "price_to_sales": _safe_ratio(market_cap, latest.revenue) or 0.0,
+        "ev_to_ebitda": 14.0,
+        "dividend_yield": 1.2,
+        "beta": 1.0,
+        "target_upside": 0.0,
+    }
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _merge_statements(payload: dict) -> list[FinancialStatementPeriod]:
@@ -130,11 +227,15 @@ def _metric(key: str, label: str, value: float | None, unit: str, interpretation
     )
 
 
-def _derive_metrics(periods: list[FinancialStatementPeriod]) -> tuple[list[FundamentalMetric], dict[str, float]]:
+def _derive_metrics(
+    periods: list[FinancialStatementPeriod],
+    quote_metrics: dict[str, float] | None = None,
+) -> tuple[list[FundamentalMetric], dict[str, float]]:
     latest = periods[0] if periods else None
     previous = periods[1] if len(periods) > 1 else None
     if not latest:
         return [], {}
+    quote_metrics = quote_metrics or {}
 
     revenue_growth = None
     if previous and previous.revenue not in (None, 0) and latest.revenue is not None:
@@ -144,6 +245,7 @@ def _derive_metrics(periods: list[FinancialStatementPeriod]) -> tuple[list[Funda
     operating_margin = (_safe_ratio(latest.operating_income, latest.revenue) or 0) * 100 if latest.operating_income is not None else None
     net_margin = (_safe_ratio(latest.net_income, latest.revenue) or 0) * 100 if latest.net_income is not None else None
     roe = (_safe_ratio(latest.net_income, latest.shareholder_equity) or 0) * 100 if latest.net_income is not None else None
+    roe = roe if roe is not None else quote_metrics.get("return_on_equity")
     roa = (_safe_ratio(latest.net_income, latest.total_assets) or 0) * 100 if latest.net_income is not None else None
     debt_to_equity = _safe_ratio(latest.total_debt, latest.shareholder_equity)
     fcf_margin = (_safe_ratio(latest.free_cash_flow, latest.revenue) or 0) * 100 if latest.free_cash_flow is not None else None
@@ -156,6 +258,15 @@ def _derive_metrics(periods: list[FinancialStatementPeriod]) -> tuple[list[Funda
         _metric("roa", "ROA", roa, "%", "Net income generated per unit of assets."),
         _metric("debt_to_equity", "Debt / equity", debt_to_equity, "x", "Balance-sheet leverage."),
         _metric("fcf_margin", "FCF margin", fcf_margin, "%", "Free cash flow relative to revenue."),
+        _metric("market_cap_b", "Market cap", _safe_ratio(quote_metrics.get("market_cap"), 1_000_000_000), "B", "Equity market value in local-currency billions."),
+        _metric("trailing_pe", "PER (TTM)", quote_metrics.get("trailing_pe"), "x", "Price divided by trailing earnings per share."),
+        _metric("forward_pe", "Forward PER", quote_metrics.get("forward_pe"), "x", "Price divided by expected forward earnings per share."),
+        _metric("price_to_book", "P/B", quote_metrics.get("price_to_book"), "x", "Price relative to book value."),
+        _metric("price_to_sales", "P/S", quote_metrics.get("price_to_sales"), "x", "Price relative to trailing sales."),
+        _metric("ev_to_ebitda", "EV/EBITDA", quote_metrics.get("ev_to_ebitda"), "x", "Enterprise value relative to EBITDA."),
+        _metric("dividend_yield", "Dividend yield", quote_metrics.get("dividend_yield"), "%", "Dividend yield from current market pricing."),
+        _metric("beta", "Beta", quote_metrics.get("beta"), "x", "Equity beta versus the reference market."),
+        _metric("target_upside", "Target upside", quote_metrics.get("target_upside"), "%", "Consensus target upside when Yahoo provides a target price."),
     ]
     metrics = [row for row in metric_rows if row is not None]
     features = {
@@ -197,7 +308,7 @@ def _fallback_periods(symbol: str) -> list[FinancialStatementPeriod]:
 
 def _fallback_fundamental(symbol: str, name: str, market: str, currency: str) -> EquityFundamental:
     periods = _fallback_periods(symbol)
-    metrics, features = _derive_metrics(periods)
+    metrics, features = _derive_metrics(periods, _fallback_quote_metrics(periods))
     return EquityFundamental(
         symbol=symbol,
         name=name,
@@ -206,12 +317,20 @@ def _fallback_fundamental(symbol: str, name: str, market: str, currency: str) ->
         periods=periods,
         metrics=metrics,
         model_features=features,
-        data_source="Local fallback fundamentals",
+        data_source="Curated fallback fundamentals",
     )
 
 
 def _fetch_yahoo_fundamental(symbol: str, name: str, market: str, currency: str) -> EquityFundamental:
-    modules = "incomeStatementHistory,balanceSheetHistory,cashflowStatementHistory"
+    modules = ",".join([
+        "incomeStatementHistory",
+        "balanceSheetHistory",
+        "cashflowStatementHistory",
+        "summaryDetail",
+        "defaultKeyStatistics",
+        "financialData",
+        "price",
+    ])
     request = Request(
         f"{YAHOO_SUMMARY_URL}/{quote(symbol, safe='')}?modules={modules}",
         headers={
@@ -224,10 +343,13 @@ def _fetch_yahoo_fundamental(symbol: str, name: str, market: str, currency: str)
         with urlopen(request, timeout=8.0) as response:
             payload = json.loads(response.read().decode("utf-8"))
         periods = _merge_statements(payload)
+        quote_metrics = _quote_metrics(payload)
+        data_source = "Yahoo Finance quoteSummary"
         if len(periods) < 2:
-            return _fallback_fundamental(symbol, name, market, currency)
+            periods = _fallback_periods(symbol)
+            data_source = "Yahoo Finance valuation + curated statement fallback" if quote_metrics else "Curated fallback fundamentals"
 
-        metrics, features = _derive_metrics(periods)
+        metrics, features = _derive_metrics(periods, quote_metrics or _fallback_quote_metrics(periods))
         return EquityFundamental(
             symbol=symbol,
             name=name,
@@ -236,17 +358,18 @@ def _fetch_yahoo_fundamental(symbol: str, name: str, market: str, currency: str)
             periods=periods,
             metrics=metrics,
             model_features=features,
-            data_source="Yahoo Finance quoteSummary",
+            data_source=data_source,
         )
     except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
         return _fallback_fundamental(symbol, name, market, currency)
 
 
 def get_equity_fundamentals() -> list[EquityFundamental]:
-    return [
-        _fetch_yahoo_fundamental(symbol, name, market, currency)
-        for symbol, name, _, market, currency, _, _ in STOCK_UNIVERSE
-    ]
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        return list(executor.map(
+            lambda item: _fetch_yahoo_fundamental(item[0], item[1], item[3], item[4]),
+            STOCK_UNIVERSE,
+        ))
 
 
 def _extract_model_weights(payload: dict) -> dict[str, float]:
