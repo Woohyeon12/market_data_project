@@ -1,5 +1,6 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -14,6 +15,25 @@ from app.schemas.research import (
 )
 
 YAHOO_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary"
+YAHOO_TIMESERIES_URL = "https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries"
+YAHOO_TIMESERIES_TYPES = [
+    "annualTotalRevenue",
+    "annualGrossProfit",
+    "annualOperatingIncome",
+    "annualNetIncome",
+    "annualTotalAssets",
+    "annualTotalLiabilitiesNetMinorityInterest",
+    "annualStockholdersEquity",
+    "annualCashAndCashEquivalents",
+    "annualTotalDebt",
+    "annualOperatingCashFlow",
+    "annualCapitalExpenditure",
+    "trailingMarketCap",
+    "quarterlyMarketCap",
+    "trailingPeRatio",
+    "quarterlyPeRatio",
+    "trailingForwardPeRatio",
+]
 FUNDAMENTAL_MODEL_FEATURES = [
     "fundamental_revenue_growth_yoy",
     "fundamental_gross_margin",
@@ -136,6 +156,117 @@ def _quote_metrics(payload: dict) -> dict[str, float]:
         "target_upside": target_upside,
         "return_on_equity": _percent_from_decimal(_raw(financial.get("returnOnEquity"))),
     }
+    return {key: value for key, value in values.items() if value is not None}
+
+
+def _timeseries_items(payload: dict, type_name: str) -> list[dict]:
+    for item in payload.get("timeseries", {}).get("result", []):
+        meta_types = item.get("meta", {}).get("type", [])
+        if type_name in meta_types and isinstance(item.get(type_name), list):
+            return item[type_name]
+    return []
+
+
+def _timeseries_value(row: dict) -> float | None:
+    return _raw(row.get("reportedValue"))
+
+
+def _timeseries_by_date(payload: dict, type_name: str) -> dict[str, float]:
+    values = {}
+    for row in _timeseries_items(payload, type_name):
+        date = row.get("asOfDate")
+        value = _timeseries_value(row)
+        if isinstance(date, str) and value is not None:
+            values[date] = value
+    return values
+
+
+def _latest_timeseries_value(payload: dict, *type_names: str) -> float | None:
+    rows = []
+    for type_name in type_names:
+        rows.extend(_timeseries_items(payload, type_name))
+    dated_rows = [
+        row
+        for row in rows
+        if isinstance(row.get("asOfDate"), str) and _timeseries_value(row) is not None
+    ]
+    if not dated_rows:
+        return None
+    latest = max(dated_rows, key=lambda row: row["asOfDate"])
+    return _timeseries_value(latest)
+
+
+def _normalized_capex(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return -abs(value)
+
+
+def _free_cash_flow(operating_cash_flow: float | None, capital_expenditure: float | None) -> float | None:
+    if operating_cash_flow is None or capital_expenditure is None:
+        return None
+    return operating_cash_flow - abs(capital_expenditure)
+
+
+def _merge_timeseries_statements(payload: dict) -> list[FinancialStatementPeriod]:
+    revenue = _timeseries_by_date(payload, "annualTotalRevenue")
+    gross_profit = _timeseries_by_date(payload, "annualGrossProfit")
+    operating_income = _timeseries_by_date(payload, "annualOperatingIncome")
+    net_income = _timeseries_by_date(payload, "annualNetIncome")
+    total_assets = _timeseries_by_date(payload, "annualTotalAssets")
+    total_liabilities = _timeseries_by_date(payload, "annualTotalLiabilitiesNetMinorityInterest")
+    shareholder_equity = _timeseries_by_date(payload, "annualStockholdersEquity")
+    total_cash = _timeseries_by_date(payload, "annualCashAndCashEquivalents")
+    total_debt = _timeseries_by_date(payload, "annualTotalDebt")
+    operating_cash_flow = _timeseries_by_date(payload, "annualOperatingCashFlow")
+    capital_expenditure = _timeseries_by_date(payload, "annualCapitalExpenditure")
+
+    dates = sorted(
+        set(revenue)
+        | set(net_income)
+        | set(total_assets)
+        | set(shareholder_equity),
+        reverse=True,
+    )
+    periods = []
+    for fiscal_date in dates[:4]:
+        capex = _normalized_capex(capital_expenditure.get(fiscal_date))
+        operating_cf = operating_cash_flow.get(fiscal_date)
+        periods.append(
+            FinancialStatementPeriod(
+                fiscal_date=fiscal_date,
+                revenue=revenue.get(fiscal_date),
+                gross_profit=gross_profit.get(fiscal_date),
+                operating_income=operating_income.get(fiscal_date),
+                net_income=net_income.get(fiscal_date),
+                total_assets=total_assets.get(fiscal_date),
+                total_liabilities=total_liabilities.get(fiscal_date),
+                shareholder_equity=shareholder_equity.get(fiscal_date),
+                total_cash=total_cash.get(fiscal_date),
+                total_debt=total_debt.get(fiscal_date),
+                operating_cash_flow=operating_cf,
+                capital_expenditure=capex,
+                free_cash_flow=_free_cash_flow(operating_cf, capex),
+            )
+        )
+    return periods
+
+
+def _timeseries_quote_metrics(payload: dict, periods: list[FinancialStatementPeriod]) -> dict[str, float]:
+    latest = periods[0] if periods else None
+    market_cap = _latest_timeseries_value(payload, "trailingMarketCap", "quarterlyMarketCap")
+    trailing_pe = _latest_timeseries_value(payload, "trailingPeRatio", "quarterlyPeRatio")
+    forward_pe = _latest_timeseries_value(payload, "trailingForwardPeRatio")
+    values = {
+        "market_cap": market_cap,
+        "trailing_pe": trailing_pe,
+        "forward_pe": forward_pe,
+    }
+    if latest and market_cap is not None:
+        values.update({
+            "price_to_book": _safe_ratio(market_cap, latest.shareholder_equity),
+            "price_to_sales": _safe_ratio(market_cap, latest.revenue),
+        })
     return {key: value for key, value in values.items() if value is not None}
 
 
@@ -321,6 +452,44 @@ def _fallback_fundamental(symbol: str, name: str, market: str, currency: str) ->
     )
 
 
+def _fetch_yahoo_timeseries_fundamental(symbol: str, name: str, market: str, currency: str) -> EquityFundamental | None:
+    period2 = int(datetime.now(timezone.utc).timestamp())
+    request = Request(
+        (
+            f"{YAHOO_TIMESERIES_URL}/{quote(symbol, safe='')}"
+            f"?symbol={quote(symbol, safe='')}"
+            f"&type={','.join(YAHOO_TIMESERIES_TYPES)}"
+            f"&period1=0&period2={period2}"
+        ),
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "btc-research-ai/0.1",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=8.0) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        periods = _merge_timeseries_statements(payload)
+        if len(periods) < 2:
+            return None
+
+        quote_metrics = _timeseries_quote_metrics(payload, periods)
+        metrics, features = _derive_metrics(periods, quote_metrics)
+        return EquityFundamental(
+            symbol=symbol,
+            name=name,
+            market=market,
+            currency=currency,
+            periods=periods,
+            metrics=metrics,
+            model_features=features,
+            data_source="Yahoo Finance fundamentals-timeseries",
+        )
+    except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
 def _fetch_yahoo_fundamental(symbol: str, name: str, market: str, currency: str) -> EquityFundamental:
     modules = ",".join([
         "incomeStatementHistory",
@@ -346,6 +515,9 @@ def _fetch_yahoo_fundamental(symbol: str, name: str, market: str, currency: str)
         quote_metrics = _quote_metrics(payload)
         data_source = "Yahoo Finance quoteSummary"
         if len(periods) < 2:
+            timeseries = _fetch_yahoo_timeseries_fundamental(symbol, name, market, currency)
+            if timeseries:
+                return timeseries
             periods = _fallback_periods(symbol)
             data_source = "Yahoo Finance valuation + curated statement fallback" if quote_metrics else "Curated fallback fundamentals"
 
@@ -361,7 +533,7 @@ def _fetch_yahoo_fundamental(symbol: str, name: str, market: str, currency: str)
             data_source=data_source,
         )
     except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
-        return _fallback_fundamental(symbol, name, market, currency)
+        return _fetch_yahoo_timeseries_fundamental(symbol, name, market, currency) or _fallback_fundamental(symbol, name, market, currency)
 
 
 def get_equity_fundamentals() -> list[EquityFundamental]:

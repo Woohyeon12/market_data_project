@@ -35,6 +35,7 @@ Build a Bitcoin and global market research-focused financial intelligence produc
 
 ## Latest Operating Note
 
+- 2026-04-18 development: Reduced fundamentals fallback by adding Yahoo Finance fundamentals-timeseries as a second source after quoteSummary. After backend rebuild, all 28 tracked equities returned Yahoo Finance fundamentals-timeseries instead of curated fallback data.
 - 2026-04-18 user directive: Updated the recurring meeting prompt to stop repeating already implemented items, give developers/designers more freedom to add useful market-data product features, allow alternate public data sources when Yahoo/fallbacks fail, and prioritize cleaning messy market snapshot layouts.
 - 2026-04-18 development: Expanded the tracked large-cap stock universe across the US, Korea, and Japan; added valuation metrics such as PER, forward PER, P/B, P/S, EV/EBITDA, dividend yield, beta, target upside, and market cap; added curated fallback valuation metrics; and tightened the Market Snapshot card text to one-line values.
 - 2026-04-18 heartbeat: Added approval-queue.md so blocked build, Docker, and Git actions are preserved for morning approval instead of disappearing into chat history.

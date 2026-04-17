@@ -10,6 +10,7 @@ The first version is intentionally small:
 - A Next.js frontend dashboard that reads from the backend.
 - Dockerfiles and docker-compose for local deployment.
 - Large-cap stock coverage across the US, Korea, and Japan with financial statement and valuation ratios.
+- A fallback-reduction data chain that tries Yahoo quoteSummary, then Yahoo fundamentals-timeseries, and only then curated local data.
 
 ## Project Layout
 

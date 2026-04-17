@@ -7,6 +7,7 @@
 - Done: `npm.cmd install`, `npm.cmd install next@15.5.15`, `npm.cmd run build`, `npm.cmd audit --audit-level=high`, and Python compile checks.
 - Done: Added `.dockerignore` files so Docker builds do not send local `node_modules`, `.next`, data, or venv folders.
 - Done: Git commit and push completed through `b14a9b4`.
+- Done: Backend Docker rebuild/restart completed after adding Yahoo fundamentals-timeseries; fundamentals now avoid curated fallback for the tracked equities.
 - Still blocked/slow: `docker compose build` and `docker compose build frontend` repeatedly timed out without useful build logs even after the context cleanup.
 
 ### Pending Approvals
