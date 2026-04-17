@@ -44,6 +44,9 @@ export type MarketInstrument = {
 
 export type IndexChartPoint = {
   date: string;
+  open: number;
+  high: number;
+  low: number;
   close: number;
 };
 
@@ -125,40 +128,40 @@ export const fallbackMarkets: MarketsOverview = {
   ],
   index_charts: [
     { symbol: "^GSPC", name: "S&P 500", currency: "USD", data_source: "Local fallback", points: [
-      { date: "Fallback 1", close: 5000 },
-      { date: "Fallback 2", close: 5070 },
-      { date: "Fallback 3", close: 5120 },
-      { date: "Fallback 4", close: 5090 },
-      { date: "Fallback 5", close: 5180 },
-      { date: "Fallback 6", close: 5240 },
-      { date: "Fallback 7", close: 5310 },
+      { date: "Fallback 1", open: 4975, high: 5050, low: 4950, close: 5000 },
+      { date: "Fallback 2", open: 5000, high: 5121, low: 5019, close: 5070 },
+      { date: "Fallback 3", open: 5070, high: 5171, low: 5069, close: 5120 },
+      { date: "Fallback 4", open: 5120, high: 5141, low: 5039, close: 5090 },
+      { date: "Fallback 5", open: 5090, high: 5232, low: 5128, close: 5180 },
+      { date: "Fallback 6", open: 5180, high: 5292, low: 5188, close: 5240 },
+      { date: "Fallback 7", open: 5240, high: 5363, low: 5257, close: 5310 },
     ] },
     { symbol: "^IXIC", name: "Nasdaq Composite", currency: "USD", data_source: "Local fallback", points: [
-      { date: "Fallback 1", close: 15800 },
-      { date: "Fallback 2", close: 16050 },
-      { date: "Fallback 3", close: 16240 },
-      { date: "Fallback 4", close: 16120 },
-      { date: "Fallback 5", close: 16480 },
-      { date: "Fallback 6", close: 16810 },
-      { date: "Fallback 7", close: 17050 },
+      { date: "Fallback 1", open: 15721, high: 15958, low: 15642, close: 15800 },
+      { date: "Fallback 2", open: 15800, high: 16211, low: 15890, close: 16050 },
+      { date: "Fallback 3", open: 16050, high: 16402, low: 16078, close: 16240 },
+      { date: "Fallback 4", open: 16240, high: 16281, low: 15959, close: 16120 },
+      { date: "Fallback 5", open: 16120, high: 16645, low: 16315, close: 16480 },
+      { date: "Fallback 6", open: 16480, high: 16978, low: 16642, close: 16810 },
+      { date: "Fallback 7", open: 16810, high: 17221, low: 16880, close: 17050 },
     ] },
     { symbol: "^KS11", name: "KOSPI", currency: "KRW", data_source: "Local fallback", points: [
-      { date: "Fallback 1", close: 2550 },
-      { date: "Fallback 2", close: 2585 },
-      { date: "Fallback 3", close: 2610 },
-      { date: "Fallback 4", close: 2590 },
-      { date: "Fallback 5", close: 2640 },
-      { date: "Fallback 6", close: 2675 },
-      { date: "Fallback 7", close: 2700 },
+      { date: "Fallback 1", open: 2537, high: 2576, low: 2525, close: 2550 },
+      { date: "Fallback 2", open: 2550, high: 2611, low: 2559, close: 2585 },
+      { date: "Fallback 3", open: 2585, high: 2636, low: 2584, close: 2610 },
+      { date: "Fallback 4", open: 2610, high: 2636, low: 2564, close: 2590 },
+      { date: "Fallback 5", open: 2590, high: 2666, low: 2614, close: 2640 },
+      { date: "Fallback 6", open: 2640, high: 2702, low: 2648, close: 2675 },
+      { date: "Fallback 7", open: 2675, high: 2727, low: 2673, close: 2700 },
     ] },
     { symbol: "^N225", name: "Nikkei 225", currency: "JPY", data_source: "Local fallback", points: [
-      { date: "Fallback 1", close: 37500 },
-      { date: "Fallback 2", close: 38100 },
-      { date: "Fallback 3", close: 38600 },
-      { date: "Fallback 4", close: 38250 },
-      { date: "Fallback 5", close: 39000 },
-      { date: "Fallback 6", close: 39700 },
-      { date: "Fallback 7", close: 40200 },
+      { date: "Fallback 1", open: 37312, high: 37875, low: 37125, close: 37500 },
+      { date: "Fallback 2", open: 37500, high: 38481, low: 37719, close: 38100 },
+      { date: "Fallback 3", open: 38100, high: 38986, low: 38214, close: 38600 },
+      { date: "Fallback 4", open: 38600, high: 39038, low: 37868, close: 38250 },
+      { date: "Fallback 5", open: 38250, high: 39390, low: 38610, close: 39000 },
+      { date: "Fallback 6", open: 39000, high: 40097, low: 39303, close: 39700 },
+      { date: "Fallback 7", open: 39700, high: 40602, low: 39798, close: 40200 },
     ] },
   ],
   summary: [

@@ -60,32 +60,46 @@ function barWidth(changePct: number, maxAbsChange: number) {
   return `${Math.min(Math.abs(changePct) / maxAbsChange, 1) * 100}%`;
 }
 
-function chartPath(chart: IndexChart) {
-  if (chart.points.length === 0) {
-    return "";
-  }
-
-  const width = 280;
-  const height = 96;
-  const closes = chart.points.map((point) => point.close);
-  const min = Math.min(...closes);
-  const max = Math.max(...closes);
-  const range = max - min || 1;
-
-  return chart.points
-    .map((point, index) => {
-      const x = chart.points.length === 1 ? width : (index / (chart.points.length - 1)) * width;
-      const y = height - ((point.close - min) / range) * height;
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
-}
-
 function chartChangePct(chart: IndexChart) {
   const first = chart.points[0]?.close ?? 0;
   const last = chart.points[chart.points.length - 1]?.close ?? first;
 
   return first ? ((last - first) / first) * 100 : 0;
+}
+
+function candleGeometry(chart: IndexChart) {
+  const width = 280;
+  const height = 96;
+  const highs = chart.points.map((point) => point.high);
+  const lows = chart.points.map((point) => point.low);
+  const min = Math.min(...lows);
+  const max = Math.max(...highs);
+  const range = max - min || 1;
+  const slot = chart.points.length ? width / chart.points.length : width;
+  const bodyWidth = Math.max(4, Math.min(12, slot * 0.58));
+
+  return chart.points.map((point, index) => {
+    const centerX = slot * index + slot / 2;
+    const y = (value: number) => height - ((value - min) / range) * height;
+    const openY = y(point.open);
+    const closeY = y(point.close);
+    const highY = y(point.high);
+    const lowY = y(point.low);
+    const bodyTop = Math.min(openY, closeY);
+    const bodyHeight = Math.max(2, Math.abs(closeY - openY));
+
+    return {
+      key: `${point.date}-${index}`,
+      rising: point.close >= point.open,
+      centerX,
+      highY,
+      lowY,
+      bodyX: centerX - bodyWidth / 2,
+      bodyTop,
+      bodyWidth,
+      bodyHeight,
+    };
+  });
 }
 
 export function ResearchDashboard() {
@@ -211,16 +225,31 @@ export function ResearchDashboard() {
                       </strong>
                     </div>
                     <svg
-                      className="line-plot"
+                      className="candle-plot"
                       viewBox="0 0 280 96"
                       role="img"
-                      aria-label={`${chart.name} one month price plot`}
+                      aria-label={`${chart.name} one month candlestick plot`}
                     >
                       <line x1="0" y1="92" x2="280" y2="92" />
-                      <path
-                        className={changePct >= 0 ? "line-positive" : "line-negative"}
-                        d={chartPath(chart)}
-                      />
+                      {candleGeometry(chart).map((candle) => (
+                        <g
+                          className={candle.rising ? "candle-positive" : "candle-negative"}
+                          key={candle.key}
+                        >
+                          <line
+                            x1={candle.centerX}
+                            y1={candle.highY}
+                            x2={candle.centerX}
+                            y2={candle.lowY}
+                          />
+                          <rect
+                            x={candle.bodyX}
+                            y={candle.bodyTop}
+                            width={candle.bodyWidth}
+                            height={candle.bodyHeight}
+                          />
+                        </g>
+                      ))}
                     </svg>
                     <div className="chart-range">
                       <span>{firstPoint?.date ?? "Start"}</span>

@@ -35,6 +35,7 @@ Build a Bitcoin research-focused financial intelligence company around this proj
 
 ## Latest Operating Note
 
+- 2026-04-17 20:02 KST: Changed major index SVG plots from line charts to candlestick charts using OHLC data from Yahoo Finance with fallback candles.
 - 2026-04-17 19:45 KST: Added one-month SVG line plots for S&P 500, Nasdaq Composite, KOSPI, and Nikkei 225 using Yahoo Finance chart data with local fallback.
 - 2026-04-17 19:31 KST: Added visual market summary bars and per-instrument move bars to make global market moves easier to scan.
 - 2026-04-17 19:20 KST: Added a global market watch API and dashboard section for selected US, Korean, Japanese equities, major indices, and gold spot using Yahoo Finance with local fallback.

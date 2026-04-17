@@ -116,7 +116,13 @@ def _fallback_index_chart(
     closes: list[float],
 ) -> IndexChart:
     points = [
-        IndexChartPoint(date=f"Fallback {index + 1}", close=close)
+        IndexChartPoint(
+            date=f"Fallback {index + 1}",
+            open=closes[index - 1] if index else close * 0.995,
+            high=close * 1.01,
+            low=close * 0.99,
+            close=close,
+        )
         for index, close in enumerate(closes)
     ]
 
@@ -150,16 +156,22 @@ def _fetch_yahoo_index_chart(
         result = payload["chart"]["result"][0]
         timestamps = result["timestamp"]
         quote_data = result["indicators"]["quote"][0]
+        opens = quote_data["open"]
+        highs = quote_data["high"]
+        lows = quote_data["low"]
         closes = quote_data["close"]
         points = []
 
-        for timestamp, close in zip(timestamps, closes):
-            if close is None:
+        for timestamp, open_price, high, low, close in zip(timestamps, opens, highs, lows, closes):
+            if open_price is None or high is None or low is None or close is None:
                 continue
 
             points.append(
                 IndexChartPoint(
                     date=datetime.fromtimestamp(timestamp, tz=timezone.utc).date().isoformat(),
+                    open=float(open_price),
+                    high=float(high),
+                    low=float(low),
                     close=float(close),
                 )
             )

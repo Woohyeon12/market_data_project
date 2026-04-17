@@ -198,29 +198,32 @@ h1 {
   font-size: 13px;
 }
 
-.line-plot {
+.candle-plot {
   width: 100%;
   height: 110px;
 }
 
-.line-plot line {
+.candle-plot > line {
   stroke: var(--line);
   stroke-width: 2;
 }
 
-.line-plot path {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.candle-plot g line {
+  stroke: currentColor;
+  stroke-width: 2;
 }
 
-.line-positive {
-  stroke: var(--accent);
+.candle-plot rect {
+  fill: currentColor;
+  rx: 2px;
 }
 
-.line-negative {
-  stroke: var(--warning);
+.candle-positive {
+  color: var(--accent);
+}
+
+.candle-negative {
+  color: var(--warning);
 }
 
 .chart-range {

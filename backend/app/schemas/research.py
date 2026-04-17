@@ -23,6 +23,9 @@ class MarketInstrument(BaseModel):
 
 class IndexChartPoint(BaseModel):
     date: str
+    open: float
+    high: float
+    low: float
     close: float
 
 
