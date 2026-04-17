@@ -35,6 +35,7 @@ Build a Bitcoin research-focused financial intelligence company around this proj
 
 ## Latest Operating Note
 
+- 2026-04-17 23:45 KST: Added a design/development request for click-based page switching so the dashboard becomes multiple focused lists instead of one long page. Implementation priority is section navigation, next/previous controls, and cleaner page grouping.
 - 2026-04-17 23:25 KST: Added a model backtesting product requirement. User wants JSON files with trained model weights and derived variables placed in a dedicated folder, then recent two-year BTC backtests displayed on the web with Sharpe ratio and win rate by model.
 - 2026-04-17 23:10 KST: Shifted near-term meetings to development and design only. Development will keep adding useful variables, indicators, research products, and interactions; design will directly inspect the dashboard and tighten layout/readability. Current implementation started with an interactive feature-correlation workbench.
 - 2026-04-17 22:28 KST: Added lead-lag feature correlation planning and AI-style research commentary requirements after the user requested both.

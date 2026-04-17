@@ -33,7 +33,36 @@ const CHART_SIZES = {
   large: { label: "Large", height: 176, maxPoints: 220 },
 };
 
+const DASHBOARD_PAGES = [
+  {
+    value: "overview",
+    label: "Overview",
+    description: "BTC snapshot, research summary, and scenarios",
+  },
+  {
+    value: "markets",
+    label: "Markets",
+    description: "Global charts, bonds, stocks, indices, and gold",
+  },
+  {
+    value: "signals",
+    label: "Signals",
+    description: "Feature heatmap, drivers, and lead-lag signals",
+  },
+  {
+    value: "models",
+    label: "Models",
+    description: "Two-year model backtests and equity curves",
+  },
+  {
+    value: "news",
+    label: "News & Risk",
+    description: "News summaries, source links, and risk notes",
+  },
+] as const;
+
 type ChartSize = keyof typeof CHART_SIZES;
+type DashboardPage = (typeof DASHBOARD_PAGES)[number]["value"];
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -422,6 +451,7 @@ export function ResearchDashboard() {
   const [showBollinger, setShowBollinger] = useState(true);
   const [showRsi, setShowRsi] = useState(true);
   const [selectedFeature, setSelectedFeature] = useState("BTC return");
+  const [activePage, setActivePage] = useState<DashboardPage>("overview");
 
   useEffect(() => {
     let active = true;
@@ -475,6 +505,12 @@ export function ResearchDashboard() {
     .filter((cell) => cell.value < 0)
     .sort((first, second) => first.value - second.value)
     .slice(0, 3);
+  const activePageIndex = DASHBOARD_PAGES.findIndex((page) => page.value === activePage);
+  const activePageInfo = DASHBOARD_PAGES[activePageIndex] ?? DASHBOARD_PAGES[0];
+  const goToPageOffset = (offset: number) => {
+    const nextIndex = (activePageIndex + offset + DASHBOARD_PAGES.length) % DASHBOARD_PAGES.length;
+    setActivePage(DASHBOARD_PAGES[nextIndex].value);
+  };
 
   return (
     <main className="page">
@@ -492,8 +528,35 @@ export function ResearchDashboard() {
           </p>
         </header>
 
+        <nav className="page-switcher" aria-label="Dashboard page list">
+          {DASHBOARD_PAGES.map((dashboardPage) => (
+            <button
+              aria-current={activePage === dashboardPage.value ? "page" : undefined}
+              className={activePage === dashboardPage.value ? "page-tab-active" : ""}
+              key={dashboardPage.value}
+              onClick={() => setActivePage(dashboardPage.value)}
+              type="button"
+            >
+              <strong>{dashboardPage.label}</strong>
+              <span>{dashboardPage.description}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="page-turner" aria-label="Dashboard page controls">
+          <button onClick={() => goToPageOffset(-1)} type="button">
+            Previous
+          </button>
+          <span>
+            {activePageIndex + 1} / {DASHBOARD_PAGES.length} - {activePageInfo.label}
+          </span>
+          <button onClick={() => goToPageOffset(1)} type="button">
+            Next
+          </button>
+        </div>
+
         <section className="grid" aria-label="Bitcoin research dashboard">
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "overview"}>
             <h2>Market Snapshot</h2>
             <p className="source-label">Source: {report.market.data_source}</p>
             <div className="metric-row">
@@ -514,7 +577,7 @@ export function ResearchDashboard() {
             </div>
           </div>
 
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "overview"}>
             <h2>Research Summary</h2>
             <ul className="summary-list">
               {report.summary.map((item) => (
@@ -523,7 +586,7 @@ export function ResearchDashboard() {
             </ul>
           </div>
 
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "overview"}>
             <h2>Scenarios</h2>
             <div className="scenario-grid">
               {report.scenarios.map((scenario) => (
@@ -542,7 +605,7 @@ export function ResearchDashboard() {
             </div>
           </div>
 
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "markets"}>
             <h2>Global Market Watch</h2>
             <p className="source-label">
               Updated {new Date(markets.generated_at).toLocaleString()}
@@ -733,7 +796,7 @@ export function ResearchDashboard() {
             <p className="disclaimer">{markets.disclaimer}</p>
           </div>
 
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "signals"}>
             <h2>Feature Correlation Heatmap</h2>
             <p className="source-label">
               {markets.correlations.lookback_days} trading days - {markets.correlations.data_source}
@@ -869,7 +932,7 @@ export function ResearchDashboard() {
             </ul>
           </div>
 
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "models"}>
             <h2>Model Backtest Lab</h2>
             <p className="source-label">
               Folder: {modelBacktests.model_folder} - {modelBacktests.evaluation_window}
@@ -956,7 +1019,7 @@ export function ResearchDashboard() {
             <p className="disclaimer">{modelBacktests.disclaimer}</p>
           </div>
 
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "news"}>
             <h2>News Signals</h2>
             <div className="news-toolbar" aria-label="News sentiment filter">
               {["all", "positive", "neutral", "negative"].map((filter) => (
@@ -1011,7 +1074,7 @@ export function ResearchDashboard() {
             </div>
           </div>
 
-          <div className="panel">
+          <div className="panel" hidden={activePage !== "news"}>
             <h2>Risk Notes</h2>
             <ul className="risk-list">
               {report.risks.map((risk) => (

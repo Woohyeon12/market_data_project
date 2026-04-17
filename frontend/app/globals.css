@@ -94,6 +94,78 @@ h1 {
   white-space: nowrap;
 }
 
+.page-switcher {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.page-switcher button {
+  display: grid;
+  gap: 5px;
+  min-height: 84px;
+  padding: 13px;
+  color: var(--foreground);
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(16, 26, 34, 0.05);
+  cursor: pointer;
+}
+
+.page-switcher strong,
+.page-switcher span {
+  overflow-wrap: anywhere;
+}
+
+.page-switcher span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.page-switcher .page-tab-active {
+  color: #ffffff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.page-switcher .page-tab-active span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.page-turner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  background: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.page-turner button {
+  min-width: 96px;
+  padding: 8px 12px;
+  color: var(--foreground);
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.page-turner span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -963,6 +1035,23 @@ h1 {
 
   h1 {
     font-size: 32px;
+  }
+
+  .page-switcher {
+    grid-template-columns: 1fr;
+  }
+
+  .page-switcher button {
+    min-height: 0;
+  }
+
+  .page-turner {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .page-turner button {
+    width: 100%;
   }
 
   .metric-row,
