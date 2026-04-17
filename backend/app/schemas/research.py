@@ -37,6 +37,53 @@ class IndexChart(BaseModel):
     data_source: str = "Local fallback"
 
 
+class FinancialStatementPeriod(BaseModel):
+    fiscal_date: str
+    revenue: float | None = None
+    gross_profit: float | None = None
+    operating_income: float | None = None
+    net_income: float | None = None
+    total_assets: float | None = None
+    total_liabilities: float | None = None
+    shareholder_equity: float | None = None
+    total_cash: float | None = None
+    total_debt: float | None = None
+    operating_cash_flow: float | None = None
+    capital_expenditure: float | None = None
+    free_cash_flow: float | None = None
+
+
+class FundamentalMetric(BaseModel):
+    key: str
+    label: str
+    value: float
+    unit: str
+    interpretation: str
+
+
+class EquityFundamental(BaseModel):
+    symbol: str
+    name: str
+    market: str
+    currency: str
+    periods: list[FinancialStatementPeriod]
+    metrics: list[FundamentalMetric]
+    model_features: dict[str, float]
+    data_source: str = "Local fallback"
+
+
+class FundamentalModelScore(BaseModel):
+    model_name: str
+    model_type: str
+    file_name: str
+    symbol: str
+    company: str
+    score: float
+    status: str
+    message: str
+    features_used: list[str]
+
+
 class CorrelationCell(BaseModel):
     x: str
     y: str
@@ -127,6 +174,8 @@ class MarketsOverview(BaseModel):
     instruments: list[MarketInstrument]
     index_charts: list[IndexChart]
     bond_charts: list[IndexChart]
+    equity_fundamentals: list[EquityFundamental] = []
+    fundamental_model_scores: list[FundamentalModelScore] = []
     correlations: CorrelationAnalysis
     summary: list[str]
     disclaimer: str

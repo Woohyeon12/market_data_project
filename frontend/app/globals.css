@@ -96,7 +96,7 @@ h1 {
 
 .page-switcher {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -525,6 +525,112 @@ h1 {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.fundamental-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.fundamental-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.fundamental-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fundamental-header h3 {
+  margin-bottom: 4px;
+}
+
+.fundamental-header span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.fundamental-header > strong {
+  align-self: start;
+  padding: 6px 8px;
+  color: var(--accent-strong);
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.fundamental-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fundamental-metrics div {
+  display: grid;
+  gap: 4px;
+  min-height: 68px;
+  padding: 9px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.fundamental-metrics span,
+.financial-row span,
+.fundamental-score-row span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.financial-table,
+.fundamental-scoreboard {
+  display: grid;
+  gap: 7px;
+}
+
+.financial-row,
+.fundamental-score-row {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.8fr) repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  padding: 8px 9px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.financial-row-head,
+.fundamental-scoreboard h3 {
+  font-weight: 700;
+}
+
+.fundamental-scoreboard {
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.fundamental-score-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 88px;
+}
+
+.fundamental-score-row strong {
+  text-align: right;
 }
 
 .model-grid {
@@ -1077,7 +1183,17 @@ h1 {
   .scenario-grid,
   .index-chart-grid,
   .relationship-grid,
+  .fundamental-grid,
   .model-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fundamental-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .financial-row,
+  .fundamental-score-row {
     grid-template-columns: 1fr;
   }
 

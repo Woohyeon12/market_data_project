@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.collectors.financials import FUNDAMENTAL_MODEL_FEATURES
 from app.collectors.global_markets import (
     _daily_returns,
     _drawdown_feature,
@@ -332,12 +333,13 @@ def build_model_backtests() -> ModelBacktestOverview:
         generated_at=datetime.now(timezone.utc),
         model_folder=str(MODEL_FOLDER),
         evaluation_window="latest 504 trading observations, approximately two years",
-        available_features=sorted(feature_series),
+        available_features=sorted([*feature_series, *FUNDAMENTAL_MODEL_FEATURES]),
         results=results,
         instructions=[
             "Place JSON model files in backend/model_registry.",
             "Use weights or derived_variables to map feature names to trained model weights.",
             "The signal from date T is evaluated against BTC return on date T+1 to reduce look-ahead bias.",
+            "Use target equity_fundamental_score for boosting or bagging models that score stocks from financial statement metrics.",
         ],
         disclaimer="Backtests are research diagnostics only. They are not live trading recommendations.",
     )

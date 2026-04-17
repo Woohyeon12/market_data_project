@@ -60,6 +60,53 @@ export type IndexChart = {
   data_source: string;
 };
 
+export type FinancialStatementPeriod = {
+  fiscal_date: string;
+  revenue?: number | null;
+  gross_profit?: number | null;
+  operating_income?: number | null;
+  net_income?: number | null;
+  total_assets?: number | null;
+  total_liabilities?: number | null;
+  shareholder_equity?: number | null;
+  total_cash?: number | null;
+  total_debt?: number | null;
+  operating_cash_flow?: number | null;
+  capital_expenditure?: number | null;
+  free_cash_flow?: number | null;
+};
+
+export type FundamentalMetric = {
+  key: string;
+  label: string;
+  value: number;
+  unit: string;
+  interpretation: string;
+};
+
+export type EquityFundamental = {
+  symbol: string;
+  name: string;
+  market: string;
+  currency: string;
+  periods: FinancialStatementPeriod[];
+  metrics: FundamentalMetric[];
+  model_features: Record<string, number>;
+  data_source: string;
+};
+
+export type FundamentalModelScore = {
+  model_name: string;
+  model_type: string;
+  file_name: string;
+  symbol: string;
+  company: string;
+  score: number;
+  status: string;
+  message: string;
+  features_used: string[];
+};
+
 export type CorrelationCell = {
   x: string;
   y: string;
@@ -123,6 +170,8 @@ export type MarketsOverview = {
   instruments: MarketInstrument[];
   index_charts: IndexChart[];
   bond_charts: IndexChart[];
+  equity_fundamentals: EquityFundamental[];
+  fundamental_model_scores: FundamentalModelScore[];
   correlations: CorrelationAnalysis;
   summary: string[];
   disclaimer: string;
@@ -141,6 +190,11 @@ export const fallbackModelBacktests: ModelBacktestOverview = {
     "nasdaq_return_1d",
     "gold_return_1d",
     "us10y_bp_chg",
+    "fundamental_revenue_growth_yoy",
+    "fundamental_net_margin",
+    "fundamental_roe",
+    "fundamental_debt_to_equity",
+    "fundamental_fcf_margin",
   ],
   results: [],
   instructions: [
@@ -323,6 +377,45 @@ export const fallbackMarkets: MarketsOverview = {
       { date: "Fallback 7", open: 4.42, high: 4.56, low: 4.48, close: 4.52 },
     ] },
   ],
+  equity_fundamentals: [
+    {
+      symbol: "AAPL",
+      name: "Apple",
+      market: "United States",
+      currency: "USD",
+      data_source: "Local fallback fundamentals",
+      periods: [
+        {
+          fiscal_date: "2025-12-31",
+          revenue: 383285000000,
+          gross_profit: 160979700000,
+          operating_income: 91988400000,
+          net_income: 96995000000,
+          total_assets: 352583000000,
+          total_liabilities: 290437000000,
+          shareholder_equity: 62146000000,
+          total_cash: 42309960000,
+          total_debt: 19886720000,
+          operating_cash_flow: 76657000000,
+          capital_expenditure: -22997100000,
+          free_cash_flow: 53659900000,
+        },
+      ],
+      metrics: [
+        { key: "revenue_growth_yoy", label: "Revenue growth YoY", value: 7.5, unit: "%", interpretation: "Top-line growth from the prior fiscal year." },
+        { key: "net_margin", label: "Net margin", value: 25.3, unit: "%", interpretation: "Bottom-line profitability after all costs." },
+        { key: "roe", label: "ROE", value: 156.1, unit: "%", interpretation: "Net income generated per unit of equity." },
+        { key: "debt_to_equity", label: "Debt / equity", value: 0.32, unit: "x", interpretation: "Balance-sheet leverage." },
+      ],
+      model_features: {
+        fundamental_revenue_growth_yoy: 7.5,
+        fundamental_net_margin: 25.3,
+        fundamental_roe: 156.1,
+        fundamental_debt_to_equity: 0.32,
+      },
+    },
+  ],
+  fundamental_model_scores: [],
   correlations: {
     lookback_days: 252,
     assets: ["BTC return", "S&P 500 return", "US 10Y bp chg", "BTC RSI(14)"],

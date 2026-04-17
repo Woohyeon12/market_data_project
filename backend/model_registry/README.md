@@ -23,6 +23,17 @@ Supported feature names:
 - `germany10y_bp_chg`
 - `uk10y_bp_chg`
 
+Financial statement scoring features:
+
+- `fundamental_revenue_growth_yoy`
+- `fundamental_gross_margin`
+- `fundamental_operating_margin`
+- `fundamental_net_margin`
+- `fundamental_roe`
+- `fundamental_roa`
+- `fundamental_debt_to_equity`
+- `fundamental_fcf_margin`
+
 Model files can use either a simple `weights` object or a `features` list with optional training-set `mean` and `std` values.
 
 ```json
@@ -42,6 +53,25 @@ Model files can use either a simple `weights` object or a `features` list with o
     { "name": "btc_volatility_20d", "weight": -0.15 },
     { "name": "sp500_return_1d", "weight": 0.20 },
     { "name": "us10y_bp_chg", "weight": -0.03 }
+  ]
+}
+```
+
+For stock fundamental boosting or bagging scores, use `target: "equity_fundamental_score"`. These files score each tracked stock from the latest annual financial statement metrics instead of running a BTC time-series backtest.
+
+```json
+{
+  "enabled": true,
+  "target": "equity_fundamental_score",
+  "name": "Quality Growth Fundamental Model",
+  "model_type": "boosting",
+  "bias": 0.0,
+  "features": [
+    { "name": "fundamental_revenue_growth_yoy", "weight": 0.12 },
+    { "name": "fundamental_net_margin", "weight": 0.18 },
+    { "name": "fundamental_roe", "weight": 0.08 },
+    { "name": "fundamental_debt_to_equity", "weight": -0.35 },
+    { "name": "fundamental_fcf_margin", "weight": 0.16 }
   ]
 }
 ```

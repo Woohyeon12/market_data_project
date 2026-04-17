@@ -6,10 +6,12 @@ from app.collectors.global_markets import (
     get_global_markets,
     get_index_charts,
 )
+from app.collectors.financials import get_equity_fundamentals, score_fundamental_models
 from app.collectors.market_data import get_btc_market_snapshot
 from app.collectors.news import get_btc_news
 from app.models.scenario_model import generate_scenarios
 from app.schemas.research import MarketsOverview, ResearchReport
+from app.services.model_backtest import MODEL_FOLDER
 
 
 def build_btc_report() -> ResearchReport:
@@ -44,21 +46,28 @@ def build_markets_overview() -> MarketsOverview:
     instruments = get_global_markets()
     index_charts = get_index_charts()
     bond_charts = get_bond_charts()
+    equity_fundamentals = get_equity_fundamentals()
+    fundamental_model_scores = score_fundamental_models(equity_fundamentals, MODEL_FOLDER)
     correlations = build_correlation_analysis(index_charts + bond_charts)
     sources = sorted({item.data_source for item in instruments})
+    fundamental_sources = sorted({item.data_source for item in equity_fundamentals})
 
     return MarketsOverview(
         generated_at=datetime.now(timezone.utc),
         instruments=instruments,
         index_charts=index_charts,
         bond_charts=bond_charts,
+        equity_fundamentals=equity_fundamentals,
+        fundamental_model_scores=fundamental_model_scores,
         correlations=correlations,
         summary=[
             "Global market overview includes selected US, Korea, and Japan equities.",
             "Major indices, gold spot, and government bond yields are included for macro context around BTC research.",
+            "Equity fundamentals include annual statements plus derived profitability, leverage, growth, and cash-flow metrics.",
             "Feature correlation heatmap compares BTC returns, market returns, yield changes, RSI, volatility, and drawdown factors.",
             "Lead-lag correlation checks whether features tend to move before BTC over 1, 5, and 20 trading day windows.",
             f"Market data is currently sourced from {', '.join(sources)}.",
+            f"Fundamental data is currently sourced from {', '.join(fundamental_sources)}.",
         ],
         disclaimer="Market overview is for research only. Not investment advice.",
     )

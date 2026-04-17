@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "target": "equity_fundamental_score",
+  "name": "Example Quality Growth Fundamental Model",
+  "model_type": "boosting",
+  "bias": 0.0,
+  "features": [
+    { "name": "fundamental_revenue_growth_yoy", "weight": 0.12 },
+    { "name": "fundamental_net_margin", "weight": 0.18 },
+    { "name": "fundamental_roe", "weight": 0.08 },
+    { "name": "fundamental_debt_to_equity", "weight": -0.35 },
+    { "name": "fundamental_fcf_margin", "weight": 0.16 }
+  ]
+}

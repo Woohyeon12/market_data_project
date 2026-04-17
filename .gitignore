@@ -12,3 +12,4 @@ backend/data/*.sqlite
 backend/data/*.sqlite-*
 backend/model_registry/*.json
 !backend/model_registry/example_model.json
+!backend/model_registry/fundamental_example_model.json

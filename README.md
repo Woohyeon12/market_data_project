@@ -71,6 +71,8 @@ Put enabled JSON model files in `backend/model_registry`.
 
 The backend reads weighted boosting, bagging, or ensemble exports from that folder and evaluates each signal on the latest 504 trading observations, roughly two years. Signals from date T are scored against BTC return on date T+1. The dashboard shows Sharpe ratio, win rate, total return, max drawdown, exposure, and a compact equity curve.
 
+For stock models, use `target: "equity_fundamental_score"` with financial statement features such as `fundamental_revenue_growth_yoy`, `fundamental_net_margin`, `fundamental_roe`, `fundamental_debt_to_equity`, and `fundamental_fcf_margin`. These models score tracked equities from the latest annual financial statement metrics.
+
 See `backend/model_registry/README.md` for the supported feature names and JSON format. User JSON files are ignored by Git by default so private model weights are not pushed accidentally.
 
 ## Next Things To Add

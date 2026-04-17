@@ -8,6 +8,8 @@ import {
   fetchBtcResearch,
   fetchMarketsOverview,
   fetchModelBacktests,
+  type EquityFundamental,
+  type FinancialStatementPeriod,
   type IndexChart,
   type MarketInstrument,
   type MarketsOverview,
@@ -45,6 +47,11 @@ const DASHBOARD_PAGES = [
     description: "Global charts, bonds, stocks, indices, and gold",
   },
   {
+    value: "fundamentals",
+    label: "Fundamentals",
+    description: "Stock statements, ratios, and financial model scores",
+  },
+  {
     value: "signals",
     label: "Signals",
     description: "Feature heatmap, drivers, and lead-lag signals",
@@ -79,6 +86,29 @@ function formatCompactUsd(value: number) {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
+}
+
+function formatFinancialValue(value?: number | null, currency = "USD") {
+  if (value === null || value === undefined) {
+    return "n/a";
+  }
+
+  const absValue = Math.abs(value);
+  const suffixes = [
+    { threshold: 1_000_000_000_000, suffix: "T" },
+    { threshold: 1_000_000_000, suffix: "B" },
+    { threshold: 1_000_000, suffix: "M" },
+  ];
+  const selected = suffixes.find((item) => absValue >= item.threshold);
+
+  if (!selected) {
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+
+  const formatted = (value / selected.threshold).toFixed(1);
+  return `${currency} ${formatted}${selected.suffix}`;
 }
 
 function formatMarketPrice(item: MarketInstrument) {
@@ -410,6 +440,26 @@ function formatPercent(value: number) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function metricDisplayValue(value: number, unit: string) {
+  if (unit === "%") {
+    return `${value.toFixed(1)}%`;
+  }
+
+  if (unit === "x") {
+    return `${value.toFixed(2)}x`;
+  }
+
+  return value.toFixed(2);
+}
+
+function topStatementPeriods(item: EquityFundamental) {
+  return item.periods.slice(0, 3);
+}
+
+function statementKey(symbol: string, period: FinancialStatementPeriod) {
+  return `${symbol}-${period.fiscal_date}`;
+}
+
 function modelCurveGeometry(points: ModelEquityPoint[]) {
   const width = 260;
   const height = 72;
@@ -491,6 +541,8 @@ export function ResearchDashboard() {
     return newsFilter === "all" || item.sentiment === newsFilter;
   });
   const chartSet = [...markets.index_charts, ...markets.bond_charts];
+  const equityFundamentals = markets.equity_fundamentals ?? [];
+  const fundamentalModelScores = markets.fundamental_model_scores ?? [];
   const activeFeature = markets.correlations.assets.includes(selectedFeature)
     ? selectedFeature
     : markets.correlations.assets[0] ?? "BTC return";
@@ -508,6 +560,7 @@ export function ResearchDashboard() {
   const pageStats: Record<DashboardPage, string> = {
     overview: `${report.scenarios.length} scenarios`,
     markets: `${chartSet.length} charts`,
+    fundamentals: `${equityFundamentals.length} stocks`,
     signals: `${markets.correlations.assets.length} features`,
     models: `${modelBacktests.results.length} models`,
     news: `${filteredNews.length} news`,
@@ -801,6 +854,75 @@ export function ResearchDashboard() {
                 </section>
               ))}
             </div>
+            <p className="disclaimer">{markets.disclaimer}</p>
+          </div>
+
+          <div className="panel" hidden={activePage !== "fundamentals"}>
+            <h2>Equity Fundamentals</h2>
+            <p className="source-label">
+              Annual statements, derived ratios, and model-ready financial features for tracked stocks.
+            </p>
+            <div className="fundamental-grid" aria-label="Equity financial statement summaries">
+              {equityFundamentals.map((item) => (
+                <article className="fundamental-card" key={item.symbol}>
+                  <div className="fundamental-header">
+                    <div>
+                      <h3>{item.name}</h3>
+                      <span>{item.symbol} - {item.market} - {item.data_source}</span>
+                    </div>
+                    <strong>{item.currency}</strong>
+                  </div>
+                  <div className="fundamental-metrics">
+                    {item.metrics.slice(0, 8).map((metric) => (
+                      <div key={`${item.symbol}-${metric.key}`} title={metric.interpretation}>
+                        <span>{metric.label}</span>
+                        <strong>{metricDisplayValue(metric.value, metric.unit)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="financial-table">
+                    <div className="financial-row financial-row-head">
+                      <span>Fiscal</span>
+                      <span>Revenue</span>
+                      <span>Net income</span>
+                      <span>FCF</span>
+                    </div>
+                    {topStatementPeriods(item).map((period) => (
+                      <div className="financial-row" key={statementKey(item.symbol, period)}>
+                        <span>{period.fiscal_date}</span>
+                        <span>{formatFinancialValue(period.revenue, item.currency)}</span>
+                        <span>{formatFinancialValue(period.net_income, item.currency)}</span>
+                        <span>{formatFinancialValue(period.free_cash_flow, item.currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="feature-pills">
+                    {Object.keys(item.model_features).slice(0, 8).map((feature) => (
+                      <span key={`${item.symbol}-${feature}`}>{feature}</span>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+            {fundamentalModelScores.length ? (
+              <div className="fundamental-scoreboard" aria-label="Fundamental model scores">
+                <h3>Fundamental model scores</h3>
+                {fundamentalModelScores.slice(0, 12).map((score) => (
+                  <div className="fundamental-score-row" key={`${score.file_name}-${score.symbol}`}>
+                    <span>{score.company}</span>
+                    <span>{score.model_name}</span>
+                    <strong>{score.score.toFixed(3)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <strong>No enabled fundamental model yet.</strong>
+                <p>
+                  Add a JSON model with target equity_fundamental_score to score stocks from financial statement metrics.
+                </p>
+              </div>
+            )}
             <p className="disclaimer">{markets.disclaimer}</p>
           </div>
 
