@@ -35,6 +35,7 @@ Build a Bitcoin research-focused financial intelligence company around this proj
 
 ## Latest Operating Note
 
+- 2026-04-17 21:05 KST: Added user priority for major BTC news summaries with a three-hour refresh cadence and a more polished research dashboard presentation.
 - 2026-04-17 20:45 KST: Added user priority for BTC charting, Bollinger Bands, RSI, chart range/size controls, and proactive small feature additions during recurring operating meetings.
 - 2026-04-17 20:20 KST: Added SQLite-backed 10-year OHLC storage for major index candles and made news cards interactive with sentiment filters and expandable source links.
 - 2026-04-17 20:02 KST: Changed major index SVG plots from line charts to candlestick charts using OHLC data from Yahoo Finance with fallback candles.

@@ -20,6 +20,7 @@ def build_btc_report() -> ResearchReport:
         summary=[
             f"BTC market data is currently sourced from {market.data_source}.",
             f"News signals are currently sourced from {', '.join(news_sources)}.",
+            "Major BTC news summaries are cached for three hours to keep the research feed fresh without overusing public feeds.",
             "The initial model favors scenario-based research over direct investment advice.",
             "Add report history and backtests before public launch.",
         ],

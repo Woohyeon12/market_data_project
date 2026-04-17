@@ -10,6 +10,8 @@ export type NewsItem = {
   title: string;
   source: string;
   url?: string | null;
+  summary?: string | null;
+  published_at?: string | null;
   sentiment: string;
   data_source: string;
 };
@@ -107,6 +109,7 @@ export const fallbackReport: ResearchReport = {
     {
       title: "Starter feed waiting for real news integration",
       source: "Local fallback",
+      summary: "News summaries will appear here after the backend fetches the latest BTC feed.",
       sentiment: "neutral",
       data_source: "Local fallback",
     },

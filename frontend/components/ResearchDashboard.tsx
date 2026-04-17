@@ -256,6 +256,19 @@ function newsKey(item: NewsItem) {
   return `${item.source}-${item.title}`;
 }
 
+function formatNewsTime(value?: string | null) {
+  if (!value) {
+    return "Recently collected";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
+}
+
 export function ResearchDashboard() {
   const [report, setReport] = useState<ResearchReport>(fallbackReport);
   const [markets, setMarkets] = useState<MarketsOverview>(fallbackMarkets);
@@ -571,11 +584,17 @@ export function ResearchDashboard() {
                       onClick={() => setSelectedNewsKey(selected ? null : key)}
                       type="button"
                     >
-                      <span>{item.title}</span>
+                      <span>
+                        {item.title}
+                        <small>{formatNewsTime(item.published_at)}</small>
+                      </span>
                       <strong className={`sentiment-${item.sentiment}`}>
                         {item.sentiment}
                       </strong>
                     </button>
+                    {item.summary ? (
+                      <p className="news-summary">{item.summary}</p>
+                    ) : null}
                     {selected ? (
                       <div className="news-detail">
                         <span>Source: {item.source}</span>

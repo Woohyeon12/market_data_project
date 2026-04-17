@@ -41,6 +41,8 @@ class NewsItem(BaseModel):
     title: str
     source: str
     url: str | None = None
+    summary: str | None = None
+    published_at: str | None = None
     sentiment: str = "neutral"
     data_source: str = "Local fallback"
 
