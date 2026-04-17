@@ -4,6 +4,7 @@
 
 ### Current Status
 
+- Done: 2026-04-18 05:17 KST Models page now has a marketplace-style carousel, selected-model score hero, stability score, since-model-start return, split consistency, comparison table, and Docker frontend rebuild.
 - Done: Kaggle authentication used the token only as a process environment variable, not as a committed file.
 - Done: Kaggle GPU kernel completed and produced 10 BTC high-volume candle boosting/bagging model backtests.
 - Done: Downloaded run outputs into `backend/model_registry/kaggle_runs/btc_volume_boosting_gpu_latest`.

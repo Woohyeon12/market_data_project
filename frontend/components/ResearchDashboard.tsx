@@ -14,7 +14,10 @@ import {
   type MarketInstrument,
   type MarketsOverview,
   type ModelBacktestOverview,
+  type ModelBacktestResult,
   type ModelEquityPoint,
+  type KaggleModelResult,
+  type KaggleModelRun,
   type NewsItem,
   type ResearchReport,
   type CorrelationCell,
@@ -451,9 +454,218 @@ function formatPercent(value: number) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function formatShortDateTime(value?: string | null) {
+  if (!value) {
+    return "n/a";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+}
+
 function normalizedPercentWidth(value: number, maxAbsValue: number) {
   const denominator = Math.max(Math.abs(maxAbsValue), 0.0001);
   return `${Math.min(Math.abs(value) / denominator, 1) * 100}%`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function average(values: number[]) {
+  if (!values.length) {
+    return 0;
+  }
+
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function standardDeviation(values: number[]) {
+  if (values.length < 2) {
+    return 0;
+  }
+
+  const mean = average(values);
+  const variance = average(values.map((value) => (value - mean) ** 2));
+  return Math.sqrt(variance);
+}
+
+function sampledEquityReturn(points: ModelEquityPoint[], fallbackReturn: number) {
+  if (points.length < 2) {
+    return fallbackReturn;
+  }
+
+  const first = points[0].equity || 1;
+  const last = points[points.length - 1].equity || first;
+  return ((last / first) - 1) * 100;
+}
+
+function equitySplitReturns(points: ModelEquityPoint[], fallbackReturn: number) {
+  if (points.length < 8) {
+    return [fallbackReturn];
+  }
+
+  const splitSize = Math.ceil(points.length / 4);
+  return [0, 1, 2, 3]
+    .map((split) => points.slice(split * splitSize, (split + 1) * splitSize))
+    .filter((chunk) => chunk.length >= 2)
+    .map((chunk) => {
+      const first = chunk[0].equity || 1;
+      const last = chunk[chunk.length - 1].equity || first;
+      return ((last / first) - 1) * 100;
+    });
+}
+
+type ShowcaseModel = {
+  id: string;
+  name: string;
+  source: string;
+  modelType: string;
+  status: string;
+  message: string;
+  createdAt?: string | null;
+  backtestStart?: string | null;
+  backtestEnd?: string | null;
+  sharpeRatio: number;
+  winRatePct: number;
+  totalReturnPct: number;
+  maxDrawdownPct: number;
+  exposurePct: number;
+  trades: number;
+  observations: number;
+  activeObservations: number;
+  returnSinceStartPct: number;
+  stabilityScore: number;
+  stabilityLabel: string;
+  positiveSplitCount: number;
+  splitCount: number;
+  splitReturnStd: number;
+  splitReturns: number[];
+  features: string[];
+  equityCurve: ModelEquityPoint[];
+};
+
+function stabilityLabel(score: number) {
+  if (score >= 78) {
+    return "Stable candidate";
+  }
+
+  if (score >= 62) {
+    return "Promising";
+  }
+
+  if (score >= 45) {
+    return "Needs monitoring";
+  }
+
+  return "Fragile";
+}
+
+function buildStabilityScore(model: {
+  sharpeRatio: number;
+  winRatePct: number;
+  maxDrawdownPct: number;
+  splitReturns: number[];
+}) {
+  const splitReturns = model.splitReturns.length ? model.splitReturns : [0];
+  const positiveRatio = splitReturns.filter((value) => value > 0).length / splitReturns.length;
+  const consistency = 1 - clamp(standardDeviation(splitReturns) / 18, 0, 1);
+  const drawdownControl = 1 - clamp(Math.abs(model.maxDrawdownPct) / 35, 0, 1);
+  const sharpeQuality = clamp((model.sharpeRatio + 0.5) / 2.2, 0, 1);
+  const winQuality = clamp((model.winRatePct - 42) / 18, 0, 1);
+
+  return Math.round(
+    positiveRatio * 28 +
+    consistency * 24 +
+    drawdownControl * 20 +
+    sharpeQuality * 18 +
+    winQuality * 10,
+  );
+}
+
+function fromLocalModel(model: ModelBacktestResult): ShowcaseModel {
+  const splitReturns = equitySplitReturns(model.equity_curve, model.total_return_pct);
+  const returnSinceStartPct = sampledEquityReturn(model.equity_curve, model.total_return_pct);
+  const stabilityScore = buildStabilityScore({
+    sharpeRatio: model.sharpe_ratio,
+    winRatePct: model.win_rate_pct,
+    maxDrawdownPct: model.max_drawdown_pct,
+    splitReturns,
+  });
+
+  return {
+    id: `local-${model.file_name}-${model.name}`,
+    name: model.name,
+    source: "Local registry",
+    modelType: model.model_type,
+    status: model.status,
+    message: model.message,
+    backtestStart: model.backtest_start,
+    backtestEnd: model.backtest_end,
+    sharpeRatio: model.sharpe_ratio,
+    winRatePct: model.win_rate_pct,
+    totalReturnPct: model.total_return_pct,
+    maxDrawdownPct: model.max_drawdown_pct,
+    exposurePct: model.exposure_pct,
+    trades: model.trades,
+    observations: model.observations,
+    activeObservations: model.observations,
+    returnSinceStartPct,
+    stabilityScore,
+    stabilityLabel: stabilityLabel(stabilityScore),
+    positiveSplitCount: splitReturns.filter((value) => value > 0).length,
+    splitCount: splitReturns.length,
+    splitReturnStd: standardDeviation(splitReturns),
+    splitReturns,
+    features: model.features,
+    equityCurve: model.equity_curve,
+  };
+}
+
+function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): ShowcaseModel {
+  const splitReturns = model.split_metrics.length
+    ? model.split_metrics.map((split) => split.total_return_pct)
+    : equitySplitReturns(model.equity_curve, model.total_return_pct);
+  const returnSinceStartPct = sampledEquityReturn(model.equity_curve, model.total_return_pct);
+  const stabilityScore = buildStabilityScore({
+    sharpeRatio: model.sharpe_ratio,
+    winRatePct: model.win_rate_pct,
+    maxDrawdownPct: model.max_drawdown_pct,
+    splitReturns,
+  });
+
+  return {
+    id: `kaggle-${run.run_id}-${model.name}`,
+    name: model.name,
+    source: "Kaggle GPU",
+    modelType: model.model_type,
+    status: model.status,
+    message: model.message,
+    createdAt: run.generated_at,
+    backtestStart: model.backtest_start,
+    backtestEnd: model.backtest_end,
+    sharpeRatio: model.sharpe_ratio,
+    winRatePct: model.win_rate_pct,
+    totalReturnPct: model.total_return_pct,
+    maxDrawdownPct: model.max_drawdown_pct,
+    exposurePct: model.exposure_pct,
+    trades: model.trades,
+    observations: model.observations,
+    activeObservations: model.active_observations,
+    returnSinceStartPct,
+    stabilityScore,
+    stabilityLabel: stabilityLabel(stabilityScore),
+    positiveSplitCount: splitReturns.filter((value) => value > 0).length,
+    splitCount: splitReturns.length,
+    splitReturnStd: standardDeviation(splitReturns),
+    splitReturns,
+    features: model.features,
+    equityCurve: model.equity_curve,
+  };
 }
 
 function metricDisplayValue(value: number, unit: string) {
@@ -539,6 +751,7 @@ export function ResearchDashboard() {
   const [selectedFeature, setSelectedFeature] = useState("BTC return");
   const [activePage, setActivePage] = useState<DashboardPage>("overview");
   const [fundamentalSort, setFundamentalSort] = useState<FundamentalSort>("fundamental_roe");
+  const [selectedModelIndex, setSelectedModelIndex] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -563,6 +776,10 @@ export function ResearchDashboard() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setSelectedModelIndex(0);
+  }, [modelBacktests.generated_at]);
 
   const groupedMarkets = groupInstruments(markets.instruments);
   const marketCategories = Object.entries(groupedMarkets);
@@ -625,6 +842,31 @@ export function ResearchDashboard() {
     0.01,
     ...topKaggleSplitCorrelations.map((item) => Math.abs(item.correlation)),
   );
+  const showcaseModels = [
+    ...modelBacktests.results.map(fromLocalModel),
+    ...modelBacktests.kaggle_runs.flatMap((run) => {
+      return run.models.map((model) => fromKaggleModel(run, model));
+    }),
+  ].sort((first, second) => {
+    return second.stabilityScore - first.stabilityScore || second.sharpeRatio - first.sharpeRatio;
+  });
+  const selectedModel = showcaseModels.length
+    ? showcaseModels[selectedModelIndex % showcaseModels.length]
+    : null;
+  const comparisonModels = showcaseModels.length
+    ? [0, 1, 2, 3].map((offset) => showcaseModels[(selectedModelIndex + offset) % showcaseModels.length])
+    : [];
+  const averageStability = Math.round(average(showcaseModels.map((model) => model.stabilityScore)));
+  const modelCarouselPosition = showcaseModels.length ? selectedModelIndex + 1 : 0;
+  const goToModelOffset = (offset: number) => {
+    if (!showcaseModels.length) {
+      return;
+    }
+
+    setSelectedModelIndex((current) => {
+      return (current + offset + showcaseModels.length) % showcaseModels.length;
+    });
+  };
   const pageStats: Record<DashboardPage, string> = {
     overview: `${report.scenarios.length} scenarios`,
     markets: `${chartSet.length} charts`,
@@ -1162,6 +1404,161 @@ export function ResearchDashboard() {
             <p className="source-label">
               Folder: {modelBacktests.model_folder} - {modelBacktests.evaluation_window}
             </p>
+            {selectedModel ? (
+              <div className="model-showcase" aria-label="Trading model performance showcase">
+                <div className="showcase-header">
+                  <div>
+                    <p className="eyebrow">Model Marketplace View</p>
+                    <h3>{selectedModel.name}</h3>
+                    <p>
+                      {selectedModel.source} - {selectedModel.modelType} - {selectedModel.stabilityLabel}
+                    </p>
+                  </div>
+                  <div className="model-carousel-controls">
+                    <button onClick={() => goToModelOffset(-1)} type="button">
+                      Previous model
+                    </button>
+                    <span>
+                      {modelCarouselPosition} / {showcaseModels.length}
+                    </span>
+                    <button onClick={() => goToModelOffset(1)} type="button">
+                      Next model
+                    </button>
+                  </div>
+                </div>
+                <div className="showcase-hero">
+                  <div className="showcase-score">
+                    <span>Stability score</span>
+                    <strong>{selectedModel.stabilityScore}</strong>
+                    <em>Average {averageStability || 0}</em>
+                  </div>
+                  <div className="showcase-metrics">
+                    <div>
+                      <span>Sharpe</span>
+                      <strong>{selectedModel.sharpeRatio.toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span>Win rate</span>
+                      <strong>{selectedModel.winRatePct.toFixed(1)}%</strong>
+                    </div>
+                    <div>
+                      <span>Backtest total</span>
+                      <strong className={selectedModel.totalReturnPct >= 0 ? "change-positive" : "change-negative"}>
+                        {formatPercent(selectedModel.totalReturnPct)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Since model start</span>
+                      <strong className={selectedModel.returnSinceStartPct >= 0 ? "change-positive" : "change-negative"}>
+                        {formatPercent(selectedModel.returnSinceStartPct)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Max drawdown</span>
+                      <strong className="change-negative">{selectedModel.maxDrawdownPct.toFixed(2)}%</strong>
+                    </div>
+                    <div>
+                      <span>Positive splits</span>
+                      <strong>{selectedModel.positiveSplitCount}/{selectedModel.splitCount}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div className="showcase-detail-grid">
+                  <div>
+                    <span>Created</span>
+                    <strong>{formatShortDateTime(selectedModel.createdAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Backtest window</span>
+                    <strong>{selectedModel.backtestStart ?? "n/a"} to {selectedModel.backtestEnd ?? "n/a"}</strong>
+                  </div>
+                  <div>
+                    <span>Exposure</span>
+                    <strong>{selectedModel.exposurePct.toFixed(1)}%</strong>
+                  </div>
+                  <div>
+                    <span>Active observations</span>
+                    <strong>{selectedModel.activeObservations.toLocaleString()} / {selectedModel.observations.toLocaleString()}</strong>
+                  </div>
+                  <div>
+                    <span>Split return volatility</span>
+                    <strong>{selectedModel.splitReturnStd.toFixed(2)}%</strong>
+                  </div>
+                  <div>
+                    <span>Position changes</span>
+                    <strong>{selectedModel.trades.toLocaleString()}</strong>
+                  </div>
+                </div>
+                {selectedModel.equityCurve.length ? (
+                  <svg
+                    className="showcase-equity-curve"
+                    viewBox={`0 0 ${modelCurveGeometry(selectedModel.equityCurve).width} ${modelCurveGeometry(selectedModel.equityCurve).height}`}
+                    role="img"
+                    aria-label={`${selectedModel.name} showcase equity curve`}
+                  >
+                    <line
+                      x1="0"
+                      y1={modelCurveGeometry(selectedModel.equityCurve).baseline}
+                      x2={modelCurveGeometry(selectedModel.equityCurve).width}
+                      y2={modelCurveGeometry(selectedModel.equityCurve).baseline}
+                    />
+                    <path d={modelCurveGeometry(selectedModel.equityCurve).path} />
+                  </svg>
+                ) : null}
+                <div className="split-return-strip" aria-label="Split return stability">
+                  {selectedModel.splitReturns.map((value, index) => (
+                    <div key={`${selectedModel.id}-split-return-${index}`}>
+                      <span>Split {index + 1}</span>
+                      <strong className={value >= 0 ? "change-positive" : "change-negative"}>
+                        {formatPercent(value)}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="model-carousel-track" aria-label="Model carousel">
+                  {showcaseModels.map((model, index) => (
+                    <button
+                      className={index === selectedModelIndex ? "model-slide-active" : ""}
+                      key={model.id}
+                      onClick={() => setSelectedModelIndex(index)}
+                      type="button"
+                    >
+                      <span>{model.source}</span>
+                      <strong>{model.name}</strong>
+                      <em>{model.stabilityScore} stability</em>
+                      <b className={model.totalReturnPct >= 0 ? "change-positive" : "change-negative"}>
+                        {formatPercent(model.totalReturnPct)}
+                      </b>
+                    </button>
+                  ))}
+                </div>
+                <div className="comparison-table" aria-label="Model comparison table">
+                  <div className="comparison-row comparison-head">
+                    <span>Model</span>
+                    <span>Stability</span>
+                    <span>Sharpe</span>
+                    <span>Win</span>
+                    <span>Total</span>
+                    <span>MDD</span>
+                  </div>
+                  {comparisonModels.map((model) => (
+                    <div className="comparison-row" key={`compare-${model.id}`}>
+                      <span>{model.name}</span>
+                      <strong>{model.stabilityScore}</strong>
+                      <strong>{model.sharpeRatio.toFixed(2)}</strong>
+                      <strong>{model.winRatePct.toFixed(1)}%</strong>
+                      <strong className={model.totalReturnPct >= 0 ? "change-positive" : "change-negative"}>
+                        {formatPercent(model.totalReturnPct)}
+                      </strong>
+                      <strong className="change-negative">{model.maxDrawdownPct.toFixed(2)}%</strong>
+                    </div>
+                  ))}
+                </div>
+                <p className="model-seller-note">
+                  Track record view only. Keep sales copy clear that model performance can decay and does not guarantee future returns.
+                </p>
+              </div>
+            ) : null}
             {modelBacktests.results.length === 0 ? (
               <div className="empty-state">
                 <strong>No enabled model files yet.</strong>
