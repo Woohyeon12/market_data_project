@@ -6,19 +6,15 @@
 
 - Done: `npm.cmd install`, `npm.cmd install next@15.5.15`, `npm.cmd run build`, `npm.cmd audit --audit-level=high`, and Python compile checks.
 - Done: Added `.dockerignore` files so Docker builds do not send local `node_modules`, `.next`, data, or venv folders.
+- Done: Git commit and push completed through `b14a9b4`.
 - Still blocked/slow: `docker compose build` and `docker compose build frontend` repeatedly timed out without useful build logs even after the context cleanup.
 
 ### Pending Approvals
 
-1. Docker-based validation
-   - Why: Docker services are running, but Docker API access returned permission denied for `docker compose exec`.
+1. Docker-based validation after Docker Desktop settles or restarts
+   - Why: Docker services are running, but image rebuild commands repeatedly timed out after the local code/build checks passed.
    - Command: `docker compose build frontend && docker compose up -d frontend`
    - Expected result: Rebuild and serve the updated dashboard at `http://localhost:3000`.
-
-2. Git commit and push
-   - Why: Git cannot create `.git/index.lock` because the current sandbox identity is denied write access inside `.git`.
-   - Command: `git add . && git commit -m "Expand equity fundamentals and valuation metrics" && git push origin main`
-   - Expected result: Upload the latest development/design changes to `origin/main`.
 
 ### Current Uncommitted Product Changes
 
