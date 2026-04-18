@@ -187,3 +187,23 @@ This log records each small model experiment so weak runs are not repeated and s
 - UI/API: Add `selected_validation_score` so the chosen candidate is auditable in the Models detail panel.
 - Expected effect: Prefer candidates that retain edge with fewer cost-heavy entries. If performance still worsens, the next step should be an explicit minimum-hold or cooldown rule rather than more hyperparameter search.
 - Full backtest status: Pending Kaggle Experiment 005 run.
+
+## 2026-04-19 05:54 UTC - Experiment 005 Result
+
+- Kaggle version: 10.
+- Candidate plan: 10 candidates per model family, with turnover-adjusted validation selection score.
+- Best model: `xgb_gpu_engineered`.
+- Selected candidate: `xgb_gpu_engineered_c03`.
+- Selected validation score: 2.122.
+- Net Sharpe: -0.217.
+- Gross Sharpe: 0.046.
+- Net total return: -10.397%.
+- Gross total return: -1.550%.
+- Win rate: 47.37%.
+- Max drawdown: -20.750%.
+- Trades: 94.
+- Total transaction cost: 9.400%.
+- Positive splits: 0/4.
+- Package candidate: false.
+- Read: The turnover-adjusted candidate score was recorded but did not change the selected candidates versus Experiment 004, so test performance was unchanged and still worse than Experiment 003. Ranking penalties alone are not enough when the same validation winner dominates.
+- Next hypothesis: Add an explicit turnover rule inside `backtest_from_scores`, such as minimum holding days and/or cooldown after exits, then let validation choose thresholds plus the turnover rule before the latest two-year test.

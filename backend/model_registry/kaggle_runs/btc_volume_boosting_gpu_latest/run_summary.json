@@ -1,6 +1,6 @@
 {
   "run_id": "btc_volume_boosting_gpu_latest",
-  "generated_at": "2026-04-18T20:38:14.776425+00:00",
+  "generated_at": "2026-04-18T20:54:39.088009+00:00",
   "accelerator": "GPU requested for LightGBM/XGBoost, ExtraTrees CPU parallel",
   "high_volume_rule": "BTC volume >= rolling 252D 70th percentile",
   "training_window": "2016-11-03 to 2024-03-17",
@@ -43,7 +43,7 @@
       "name": "xgb_gpu_engineered",
       "model_type": "xgboost_gpu_classifier",
       "status": "ok",
-      "message": "Engineered features with normalized first-order inputs and re-normalized second-order interactions. Best of 10 validation candidates selected before the latest two-year test; Sharpe target 2.0 not met on the latest two-year test.",
+      "message": "Engineered features with normalized first-order inputs and re-normalized second-order interactions. Best of 10 candidates selected by turnover-adjusted validation score before the latest two-year test; Sharpe target 2.0 not met on the latest two-year test.",
       "backtest_start": "2024-11-26",
       "backtest_end": "2026-04-17",
       "features": [
@@ -451,6 +451,7 @@
       "selected_candidate": "xgb_gpu_engineered_c03",
       "selected_candidate_index": 3,
       "candidate_count": 10,
+      "selected_validation_score": 2.122,
       "selected_hyperparameters": {
         "n_estimators": 480,
         "max_depth": 3,
@@ -503,7 +504,8 @@
           "validation_trades": 36,
           "validation_total_transaction_cost_pct": 3.6,
           "validation_observations": 252,
-          "validation_active_observations": 25
+          "validation_active_observations": 25,
+          "validation_selection_score": 2.122
         },
         {
           "candidate_name": "xgb_gpu_engineered_c04",
@@ -540,7 +542,8 @@
           "validation_trades": 50,
           "validation_total_transaction_cost_pct": 5.0,
           "validation_observations": 252,
-          "validation_active_observations": 29
+          "validation_active_observations": 29,
+          "validation_selection_score": 1.872
         },
         {
           "candidate_name": "xgb_gpu_engineered_c10",
@@ -577,7 +580,8 @@
           "validation_trades": 51,
           "validation_total_transaction_cost_pct": 5.1,
           "validation_observations": 252,
-          "validation_active_observations": 42
+          "validation_active_observations": 42,
+          "validation_selection_score": 1.585
         },
         {
           "candidate_name": "xgb_gpu_engineered_c07",
@@ -614,7 +618,8 @@
           "validation_trades": 33,
           "validation_total_transaction_cost_pct": 3.3,
           "validation_observations": 252,
-          "validation_active_observations": 19
+          "validation_active_observations": 19,
+          "validation_selection_score": 1.51
         },
         {
           "candidate_name": "xgb_gpu_engineered_c09",
@@ -651,7 +656,8 @@
           "validation_trades": 44,
           "validation_total_transaction_cost_pct": 4.4,
           "validation_observations": 252,
-          "validation_active_observations": 28
+          "validation_active_observations": 28,
+          "validation_selection_score": 1.235
         },
         {
           "candidate_name": "xgb_gpu_engineered_c02",
@@ -688,118 +694,8 @@
           "validation_trades": 50,
           "validation_total_transaction_cost_pct": 5.0,
           "validation_observations": 252,
-          "validation_active_observations": 35
-        },
-        {
-          "candidate_name": "xgb_gpu_engineered_c01",
-          "candidate_index": 1,
-          "status": "ok",
-          "model_type": "xgboost_gpu_classifier",
-          "selected_threshold": 0.519277,
-          "selected_short_threshold": null,
-          "selected_score_margin": 0.05,
-          "strategy_side": "long_only",
-          "hyperparameters": {
-            "n_estimators": 360,
-            "max_depth": 2,
-            "learning_rate": 0.04,
-            "subsample": 0.72,
-            "colsample_bytree": 0.5,
-            "reg_alpha": 0.35,
-            "reg_lambda": 1.1,
-            "min_child_weight": 5.0,
-            "gamma": 0.2,
-            "objective": "binary:logistic",
-            "eval_metric": "logloss",
-            "tree_method": "hist",
-            "device": "cuda",
-            "random_state": 3701
-          },
-          "validation_sharpe_ratio": 1.454,
-          "validation_gross_sharpe_ratio": 1.628,
-          "validation_win_rate_pct": 52.78,
-          "validation_total_return_pct": 38.808,
-          "validation_gross_total_return_pct": 45.02,
-          "validation_max_drawdown_pct": -9.046,
-          "validation_exposure_pct": 14.29,
-          "validation_trades": 44,
-          "validation_total_transaction_cost_pct": 4.4,
-          "validation_observations": 252,
-          "validation_active_observations": 36
-        },
-        {
-          "candidate_name": "xgb_gpu_engineered_c08",
-          "candidate_index": 8,
-          "status": "ok",
-          "model_type": "xgboost_gpu_classifier",
-          "selected_threshold": 0.541204,
-          "selected_short_threshold": null,
-          "selected_score_margin": 0.05,
-          "strategy_side": "long_only",
-          "hyperparameters": {
-            "n_estimators": 460,
-            "max_depth": 2,
-            "learning_rate": 0.032,
-            "subsample": 0.68,
-            "colsample_bytree": 0.44,
-            "reg_alpha": 0.45,
-            "reg_lambda": 1.3,
-            "min_child_weight": 6.0,
-            "gamma": 0.25,
-            "objective": "binary:logistic",
-            "eval_metric": "logloss",
-            "tree_method": "hist",
-            "device": "cuda",
-            "random_state": 3708
-          },
-          "validation_sharpe_ratio": 1.407,
-          "validation_gross_sharpe_ratio": 1.568,
-          "validation_win_rate_pct": 53.57,
-          "validation_total_return_pct": 36.611,
-          "validation_gross_total_return_pct": 42.158,
-          "validation_max_drawdown_pct": -8.921,
-          "validation_exposure_pct": 11.11,
-          "validation_trades": 40,
-          "validation_total_transaction_cost_pct": 4.0,
-          "validation_observations": 252,
-          "validation_active_observations": 28
-        },
-        {
-          "candidate_name": "xgb_gpu_engineered_c06",
-          "candidate_index": 6,
-          "status": "ok",
-          "model_type": "xgboost_gpu_classifier",
-          "selected_threshold": 0.523241,
-          "selected_short_threshold": 0.300679,
-          "selected_score_margin": 0.075,
-          "strategy_side": "long_short",
-          "hyperparameters": {
-            "n_estimators": 640,
-            "max_depth": 4,
-            "learning_rate": 0.018,
-            "subsample": 0.84,
-            "colsample_bytree": 0.58,
-            "reg_alpha": 0.1,
-            "reg_lambda": 0.6,
-            "min_child_weight": 2.0,
-            "gamma": 0.03,
-            "objective": "binary:logistic",
-            "eval_metric": "logloss",
-            "tree_method": "hist",
-            "device": "cuda",
-            "random_state": 3706
-          },
-          "validation_sharpe_ratio": 1.403,
-          "validation_gross_sharpe_ratio": 1.577,
-          "validation_win_rate_pct": 50.0,
-          "validation_total_return_pct": 37.098,
-          "validation_gross_total_return_pct": 43.236,
-          "validation_max_drawdown_pct": -7.577,
-          "validation_exposure_pct": 12.7,
-          "validation_trades": 44,
-          "validation_total_transaction_cost_pct": 4.4,
-          "validation_observations": 252,
-          "validation_active_observations": 32
+          "validation_active_observations": 35,
+          "validation_selection_score": 1.096
         },
         {
           "candidate_name": "xgb_gpu_engineered_c05",
@@ -836,7 +732,122 @@
           "validation_trades": 32,
           "validation_total_transaction_cost_pct": 3.2,
           "validation_observations": 252,
-          "validation_active_observations": 22
+          "validation_active_observations": 22,
+          "validation_selection_score": 1.03
+        },
+        {
+          "candidate_name": "xgb_gpu_engineered_c08",
+          "candidate_index": 8,
+          "status": "ok",
+          "model_type": "xgboost_gpu_classifier",
+          "selected_threshold": 0.541204,
+          "selected_short_threshold": null,
+          "selected_score_margin": 0.05,
+          "strategy_side": "long_only",
+          "hyperparameters": {
+            "n_estimators": 460,
+            "max_depth": 2,
+            "learning_rate": 0.032,
+            "subsample": 0.68,
+            "colsample_bytree": 0.44,
+            "reg_alpha": 0.45,
+            "reg_lambda": 1.3,
+            "min_child_weight": 6.0,
+            "gamma": 0.25,
+            "objective": "binary:logistic",
+            "eval_metric": "logloss",
+            "tree_method": "hist",
+            "device": "cuda",
+            "random_state": 3708
+          },
+          "validation_sharpe_ratio": 1.407,
+          "validation_gross_sharpe_ratio": 1.568,
+          "validation_win_rate_pct": 53.57,
+          "validation_total_return_pct": 36.611,
+          "validation_gross_total_return_pct": 42.158,
+          "validation_max_drawdown_pct": -8.921,
+          "validation_exposure_pct": 11.11,
+          "validation_trades": 40,
+          "validation_total_transaction_cost_pct": 4.0,
+          "validation_observations": 252,
+          "validation_active_observations": 28,
+          "validation_selection_score": 1.022
+        },
+        {
+          "candidate_name": "xgb_gpu_engineered_c01",
+          "candidate_index": 1,
+          "status": "ok",
+          "model_type": "xgboost_gpu_classifier",
+          "selected_threshold": 0.519277,
+          "selected_short_threshold": null,
+          "selected_score_margin": 0.05,
+          "strategy_side": "long_only",
+          "hyperparameters": {
+            "n_estimators": 360,
+            "max_depth": 2,
+            "learning_rate": 0.04,
+            "subsample": 0.72,
+            "colsample_bytree": 0.5,
+            "reg_alpha": 0.35,
+            "reg_lambda": 1.1,
+            "min_child_weight": 5.0,
+            "gamma": 0.2,
+            "objective": "binary:logistic",
+            "eval_metric": "logloss",
+            "tree_method": "hist",
+            "device": "cuda",
+            "random_state": 3701
+          },
+          "validation_sharpe_ratio": 1.454,
+          "validation_gross_sharpe_ratio": 1.628,
+          "validation_win_rate_pct": 52.78,
+          "validation_total_return_pct": 38.808,
+          "validation_gross_total_return_pct": 45.02,
+          "validation_max_drawdown_pct": -9.046,
+          "validation_exposure_pct": 14.29,
+          "validation_trades": 44,
+          "validation_total_transaction_cost_pct": 4.4,
+          "validation_observations": 252,
+          "validation_active_observations": 36,
+          "validation_selection_score": 1.02
+        },
+        {
+          "candidate_name": "xgb_gpu_engineered_c06",
+          "candidate_index": 6,
+          "status": "ok",
+          "model_type": "xgboost_gpu_classifier",
+          "selected_threshold": 0.523241,
+          "selected_short_threshold": 0.300679,
+          "selected_score_margin": 0.075,
+          "strategy_side": "long_short",
+          "hyperparameters": {
+            "n_estimators": 640,
+            "max_depth": 4,
+            "learning_rate": 0.018,
+            "subsample": 0.84,
+            "colsample_bytree": 0.58,
+            "reg_alpha": 0.1,
+            "reg_lambda": 0.6,
+            "min_child_weight": 2.0,
+            "gamma": 0.03,
+            "objective": "binary:logistic",
+            "eval_metric": "logloss",
+            "tree_method": "hist",
+            "device": "cuda",
+            "random_state": 3706
+          },
+          "validation_sharpe_ratio": 1.403,
+          "validation_gross_sharpe_ratio": 1.577,
+          "validation_win_rate_pct": 50.0,
+          "validation_total_return_pct": 37.098,
+          "validation_gross_total_return_pct": 43.236,
+          "validation_max_drawdown_pct": -7.577,
+          "validation_exposure_pct": 12.7,
+          "validation_trades": 44,
+          "validation_total_transaction_cost_pct": 4.4,
+          "validation_observations": 252,
+          "validation_active_observations": 32,
+          "validation_selection_score": 0.966
         }
       ],
       "sharpe_target": 2.0,
@@ -866,6 +877,7 @@
       "validation_total_transaction_cost_pct": 3.6,
       "validation_observations": 252,
       "validation_active_observations": 25,
+      "validation_selection_score": 2.122,
       "sharpe_ratio": -0.217,
       "gross_sharpe_ratio": 0.046,
       "win_rate_pct": 47.37,
@@ -1198,31 +1210,31 @@
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_us30y_us10y_spread__z_btc_drawdown_change_120d__sub",
-          "correlation": 0.1229
+          "correlation": 0.1226
         },
         {
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_rolling_position_60d__z_btc_drawdown_change_120d__sub",
-          "correlation": 0.1006
+          "correlation": 0.1012
         },
         {
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_drawdown_change_60d__z_gold_return_7d__add",
-          "correlation": 0.0085
+          "correlation": 0.0086
         },
         {
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_trend_above_sma50__z_btc_drawdown_change_120d__sub",
-          "correlation": 0.0896
+          "correlation": 0.0899
         },
         {
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_sp500_return_1d__z_us5y_bp_chg_7d__add",
-          "correlation": -0.0543
+          "correlation": -0.0542
         },
         {
           "model_name": "xgb_gpu_engineered",
@@ -1234,13 +1246,13 @@
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_rolling_position_60d__z_btc_drawdown_change_30d__sub",
-          "correlation": 0.1089
+          "correlation": 0.1098
         },
         {
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_us30y_us10y_spread__z_silver_return_7d__sub",
-          "correlation": -0.083
+          "correlation": -0.0832
         },
         {
           "model_name": "xgb_gpu_engineered",
@@ -1252,7 +1264,7 @@
           "model_name": "xgb_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_bollinger_lower_distance_20d__z_btc_sp500_rolling_corr_30d__sub",
-          "correlation": -0.1141
+          "correlation": -0.1134
         }
       ],
       "equity_curve": [
@@ -2270,7 +2282,7 @@
       "name": "lgbm_gpu_engineered",
       "model_type": "lightgbm_gpu_classifier",
       "status": "ok",
-      "message": "Engineered features with normalized first-order inputs and re-normalized second-order interactions. Best of 10 validation candidates selected before the latest two-year test; Sharpe target 2.0 not met on the latest two-year test.",
+      "message": "Engineered features with normalized first-order inputs and re-normalized second-order interactions. Best of 10 candidates selected by turnover-adjusted validation score before the latest two-year test; Sharpe target 2.0 not met on the latest two-year test.",
       "backtest_start": "2024-11-26",
       "backtest_end": "2026-04-17",
       "features": [
@@ -2678,6 +2690,7 @@
       "selected_candidate": "lgbm_gpu_engineered_c01",
       "selected_candidate_index": 1,
       "candidate_count": 10,
+      "selected_validation_score": 2.136,
       "selected_hyperparameters": {
         "n_estimators": 360,
         "max_depth": 3,
@@ -2726,77 +2739,8 @@
           "validation_trades": 33,
           "validation_total_transaction_cost_pct": 3.3,
           "validation_observations": 252,
-          "validation_active_observations": 19
-        },
-        {
-          "candidate_name": "lgbm_gpu_engineered_c05",
-          "candidate_index": 5,
-          "status": "ok",
-          "model_type": "lightgbm_gpu_classifier",
-          "selected_threshold": 0.571384,
-          "selected_short_threshold": null,
-          "selected_score_margin": 0.0,
-          "strategy_side": "long_only",
-          "hyperparameters": {
-            "n_estimators": 580,
-            "max_depth": 4,
-            "num_leaves": 22,
-            "learning_rate": 0.021,
-            "subsample": 0.76,
-            "colsample_bytree": 0.7,
-            "reg_alpha": 0.15,
-            "reg_lambda": 0.8,
-            "min_child_samples": 20,
-            "objective": "binary",
-            "device": "gpu",
-            "random_state": 4105
-          },
-          "validation_sharpe_ratio": 2.062,
-          "validation_gross_sharpe_ratio": 2.269,
-          "validation_win_rate_pct": 58.33,
-          "validation_total_return_pct": 55.827,
-          "validation_gross_total_return_pct": 64.056,
-          "validation_max_drawdown_pct": -4.548,
-          "validation_exposure_pct": 14.29,
-          "validation_trades": 52,
-          "validation_total_transaction_cost_pct": 5.2,
-          "validation_observations": 252,
-          "validation_active_observations": 36
-        },
-        {
-          "candidate_name": "lgbm_gpu_engineered_c09",
-          "candidate_index": 9,
-          "status": "ok",
-          "model_type": "lightgbm_gpu_classifier",
-          "selected_threshold": 0.511004,
-          "selected_short_threshold": 0.343532,
-          "selected_score_margin": 0.075,
-          "strategy_side": "long_short",
-          "hyperparameters": {
-            "n_estimators": 760,
-            "max_depth": 3,
-            "num_leaves": 14,
-            "learning_rate": 0.015,
-            "subsample": 0.8,
-            "colsample_bytree": 0.52,
-            "reg_alpha": 0.22,
-            "reg_lambda": 0.95,
-            "min_child_samples": 24,
-            "objective": "binary",
-            "device": "gpu",
-            "random_state": 4109
-          },
-          "validation_sharpe_ratio": 2.054,
-          "validation_gross_sharpe_ratio": 2.227,
-          "validation_win_rate_pct": 61.54,
-          "validation_total_return_pct": 55.456,
-          "validation_gross_total_return_pct": 62.363,
-          "validation_max_drawdown_pct": -9.099,
-          "validation_exposure_pct": 10.32,
-          "validation_trades": 44,
-          "validation_total_transaction_cost_pct": 4.4,
-          "validation_observations": 252,
-          "validation_active_observations": 26
+          "validation_active_observations": 19,
+          "validation_selection_score": 2.136
         },
         {
           "candidate_name": "lgbm_gpu_engineered_c08",
@@ -2831,112 +2775,80 @@
           "validation_trades": 26,
           "validation_total_transaction_cost_pct": 2.6,
           "validation_observations": 252,
-          "validation_active_observations": 18
+          "validation_active_observations": 18,
+          "validation_selection_score": 2.062
         },
         {
-          "candidate_name": "lgbm_gpu_engineered_c03",
-          "candidate_index": 3,
+          "candidate_name": "lgbm_gpu_engineered_c09",
+          "candidate_index": 9,
           "status": "ok",
           "model_type": "lightgbm_gpu_classifier",
-          "selected_threshold": 0.536007,
+          "selected_threshold": 0.511004,
+          "selected_short_threshold": 0.343532,
+          "selected_score_margin": 0.075,
+          "strategy_side": "long_short",
+          "hyperparameters": {
+            "n_estimators": 760,
+            "max_depth": 3,
+            "num_leaves": 14,
+            "learning_rate": 0.015,
+            "subsample": 0.8,
+            "colsample_bytree": 0.52,
+            "reg_alpha": 0.22,
+            "reg_lambda": 0.95,
+            "min_child_samples": 24,
+            "objective": "binary",
+            "device": "gpu",
+            "random_state": 4109
+          },
+          "validation_sharpe_ratio": 2.054,
+          "validation_gross_sharpe_ratio": 2.227,
+          "validation_win_rate_pct": 61.54,
+          "validation_total_return_pct": 55.456,
+          "validation_gross_total_return_pct": 62.363,
+          "validation_max_drawdown_pct": -9.099,
+          "validation_exposure_pct": 10.32,
+          "validation_trades": 44,
+          "validation_total_transaction_cost_pct": 4.4,
+          "validation_observations": 252,
+          "validation_active_observations": 26,
+          "validation_selection_score": 1.869
+        },
+        {
+          "candidate_name": "lgbm_gpu_engineered_c05",
+          "candidate_index": 5,
+          "status": "ok",
+          "model_type": "lightgbm_gpu_classifier",
+          "selected_threshold": 0.571384,
           "selected_short_threshold": null,
           "selected_score_margin": 0.0,
           "strategy_side": "long_only",
           "hyperparameters": {
-            "n_estimators": 480,
+            "n_estimators": 580,
             "max_depth": 4,
-            "num_leaves": 16,
-            "learning_rate": 0.026,
-            "subsample": 0.82,
-            "colsample_bytree": 0.62,
-            "reg_alpha": 0.12,
-            "reg_lambda": 0.55,
-            "min_child_samples": 16,
+            "num_leaves": 22,
+            "learning_rate": 0.021,
+            "subsample": 0.76,
+            "colsample_bytree": 0.7,
+            "reg_alpha": 0.15,
+            "reg_lambda": 0.8,
+            "min_child_samples": 20,
             "objective": "binary",
             "device": "gpu",
-            "random_state": 4103
+            "random_state": 4105
           },
-          "validation_sharpe_ratio": 1.893,
-          "validation_gross_sharpe_ratio": 2.136,
-          "validation_win_rate_pct": 59.18,
-          "validation_total_return_pct": 53.743,
-          "validation_gross_total_return_pct": 63.649,
-          "validation_max_drawdown_pct": -7.083,
-          "validation_exposure_pct": 19.44,
-          "validation_trades": 63,
-          "validation_total_transaction_cost_pct": 6.3,
-          "validation_observations": 252,
-          "validation_active_observations": 49
-        },
-        {
-          "candidate_name": "lgbm_gpu_engineered_c06",
-          "candidate_index": 6,
-          "status": "ok",
-          "model_type": "lightgbm_gpu_classifier",
-          "selected_threshold": 0.508426,
-          "selected_short_threshold": null,
-          "selected_score_margin": 0.035,
-          "strategy_side": "long_only",
-          "hyperparameters": {
-            "n_estimators": 640,
-            "max_depth": 5,
-            "num_leaves": 24,
-            "learning_rate": 0.019,
-            "subsample": 0.84,
-            "colsample_bytree": 0.58,
-            "reg_alpha": 0.1,
-            "reg_lambda": 0.6,
-            "min_child_samples": 18,
-            "objective": "binary",
-            "device": "gpu",
-            "random_state": 4106
-          },
-          "validation_sharpe_ratio": 1.841,
-          "validation_gross_sharpe_ratio": 2.106,
-          "validation_win_rate_pct": 57.78,
-          "validation_total_return_pct": 49.164,
-          "validation_gross_total_return_pct": 59.106,
+          "validation_sharpe_ratio": 2.062,
+          "validation_gross_sharpe_ratio": 2.269,
+          "validation_win_rate_pct": 58.33,
+          "validation_total_return_pct": 55.827,
+          "validation_gross_total_return_pct": 64.056,
           "validation_max_drawdown_pct": -4.548,
-          "validation_exposure_pct": 17.86,
-          "validation_trades": 65,
-          "validation_total_transaction_cost_pct": 6.5,
+          "validation_exposure_pct": 14.29,
+          "validation_trades": 52,
+          "validation_total_transaction_cost_pct": 5.2,
           "validation_observations": 252,
-          "validation_active_observations": 45
-        },
-        {
-          "candidate_name": "lgbm_gpu_engineered_c04",
-          "candidate_index": 4,
-          "status": "ok",
-          "model_type": "lightgbm_gpu_classifier",
-          "selected_threshold": 0.641256,
-          "selected_short_threshold": null,
-          "selected_score_margin": 0.0,
-          "strategy_side": "long_only",
-          "hyperparameters": {
-            "n_estimators": 520,
-            "max_depth": 4,
-            "num_leaves": 18,
-            "learning_rate": 0.024,
-            "subsample": 0.86,
-            "colsample_bytree": 0.66,
-            "reg_alpha": 0.08,
-            "reg_lambda": 0.45,
-            "min_child_samples": 14,
-            "objective": "binary",
-            "device": "gpu",
-            "random_state": 4104
-          },
-          "validation_sharpe_ratio": 1.724,
-          "validation_gross_sharpe_ratio": 1.887,
-          "validation_win_rate_pct": 65.22,
-          "validation_total_return_pct": 44.227,
-          "validation_gross_total_return_pct": 50.055,
-          "validation_max_drawdown_pct": -8.123,
-          "validation_exposure_pct": 9.13,
-          "validation_trades": 40,
-          "validation_total_transaction_cost_pct": 4.0,
-          "validation_observations": 252,
-          "validation_active_observations": 23
+          "validation_active_observations": 36,
+          "validation_selection_score": 1.791
         },
         {
           "candidate_name": "lgbm_gpu_engineered_c02",
@@ -2971,7 +2883,44 @@
           "validation_trades": 30,
           "validation_total_transaction_cost_pct": 3.0,
           "validation_observations": 252,
-          "validation_active_observations": 19
+          "validation_active_observations": 19,
+          "validation_selection_score": 1.619
+        },
+        {
+          "candidate_name": "lgbm_gpu_engineered_c04",
+          "candidate_index": 4,
+          "status": "ok",
+          "model_type": "lightgbm_gpu_classifier",
+          "selected_threshold": 0.641256,
+          "selected_short_threshold": null,
+          "selected_score_margin": 0.0,
+          "strategy_side": "long_only",
+          "hyperparameters": {
+            "n_estimators": 520,
+            "max_depth": 4,
+            "num_leaves": 18,
+            "learning_rate": 0.024,
+            "subsample": 0.86,
+            "colsample_bytree": 0.66,
+            "reg_alpha": 0.08,
+            "reg_lambda": 0.45,
+            "min_child_samples": 14,
+            "objective": "binary",
+            "device": "gpu",
+            "random_state": 4104
+          },
+          "validation_sharpe_ratio": 1.724,
+          "validation_gross_sharpe_ratio": 1.887,
+          "validation_win_rate_pct": 65.22,
+          "validation_total_return_pct": 44.227,
+          "validation_gross_total_return_pct": 50.055,
+          "validation_max_drawdown_pct": -8.123,
+          "validation_exposure_pct": 9.13,
+          "validation_trades": 40,
+          "validation_total_transaction_cost_pct": 4.0,
+          "validation_observations": 252,
+          "validation_active_observations": 23,
+          "validation_selection_score": 1.466
         },
         {
           "candidate_name": "lgbm_gpu_engineered_c07",
@@ -3006,14 +2955,87 @@
           "validation_trades": 32,
           "validation_total_transaction_cost_pct": 3.2,
           "validation_observations": 252,
-          "validation_active_observations": 19
+          "validation_active_observations": 19,
+          "validation_selection_score": 1.395
+        },
+        {
+          "candidate_name": "lgbm_gpu_engineered_c03",
+          "candidate_index": 3,
+          "status": "ok",
+          "model_type": "lightgbm_gpu_classifier",
+          "selected_threshold": 0.536007,
+          "selected_short_threshold": null,
+          "selected_score_margin": 0.0,
+          "strategy_side": "long_only",
+          "hyperparameters": {
+            "n_estimators": 480,
+            "max_depth": 4,
+            "num_leaves": 16,
+            "learning_rate": 0.026,
+            "subsample": 0.82,
+            "colsample_bytree": 0.62,
+            "reg_alpha": 0.12,
+            "reg_lambda": 0.55,
+            "min_child_samples": 16,
+            "objective": "binary",
+            "device": "gpu",
+            "random_state": 4103
+          },
+          "validation_sharpe_ratio": 1.893,
+          "validation_gross_sharpe_ratio": 2.136,
+          "validation_win_rate_pct": 59.18,
+          "validation_total_return_pct": 53.743,
+          "validation_gross_total_return_pct": 63.649,
+          "validation_max_drawdown_pct": -7.083,
+          "validation_exposure_pct": 19.44,
+          "validation_trades": 63,
+          "validation_total_transaction_cost_pct": 6.3,
+          "validation_observations": 252,
+          "validation_active_observations": 49,
+          "validation_selection_score": 1.333
+        },
+        {
+          "candidate_name": "lgbm_gpu_engineered_c06",
+          "candidate_index": 6,
+          "status": "ok",
+          "model_type": "lightgbm_gpu_classifier",
+          "selected_threshold": 0.508426,
+          "selected_short_threshold": null,
+          "selected_score_margin": 0.035,
+          "strategy_side": "long_only",
+          "hyperparameters": {
+            "n_estimators": 640,
+            "max_depth": 5,
+            "num_leaves": 24,
+            "learning_rate": 0.019,
+            "subsample": 0.84,
+            "colsample_bytree": 0.58,
+            "reg_alpha": 0.1,
+            "reg_lambda": 0.6,
+            "min_child_samples": 18,
+            "objective": "binary",
+            "device": "gpu",
+            "random_state": 4106
+          },
+          "validation_sharpe_ratio": 1.841,
+          "validation_gross_sharpe_ratio": 2.106,
+          "validation_win_rate_pct": 57.78,
+          "validation_total_return_pct": 49.164,
+          "validation_gross_total_return_pct": 59.106,
+          "validation_max_drawdown_pct": -4.548,
+          "validation_exposure_pct": 17.86,
+          "validation_trades": 65,
+          "validation_total_transaction_cost_pct": 6.5,
+          "validation_observations": 252,
+          "validation_active_observations": 45,
+          "validation_selection_score": 1.21
         },
         {
           "candidate_name": "lgbm_gpu_engineered_c10",
           "candidate_index": 10,
           "status": "ok",
           "model_type": "lightgbm_gpu_classifier",
-          "selected_threshold": 0.650713,
+          "selected_threshold": 0.650714,
           "selected_short_threshold": 0.218193,
           "selected_score_margin": 0.02,
           "strategy_side": "long_short",
@@ -3041,7 +3063,8 @@
           "validation_trades": 38,
           "validation_total_transaction_cost_pct": 3.8,
           "validation_observations": 252,
-          "validation_active_observations": 22
+          "validation_active_observations": 22,
+          "validation_selection_score": 1.101
         }
       ],
       "sharpe_target": 2.0,
@@ -3071,6 +3094,7 @@
       "validation_total_transaction_cost_pct": 3.3,
       "validation_observations": 252,
       "validation_active_observations": 19,
+      "validation_selection_score": 2.136,
       "sharpe_ratio": -0.374,
       "gross_sharpe_ratio": -0.17,
       "win_rate_pct": 45.28,
@@ -3409,7 +3433,7 @@
           "model_name": "lgbm_gpu_engineered",
           "split": 4,
           "feature": "z_btc_return_lag_30",
-          "correlation": 0.0921
+          "correlation": 0.0916
         },
         {
           "model_name": "lgbm_gpu_engineered",
@@ -3421,7 +3445,7 @@
           "model_name": "lgbm_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_bollinger_width_20d__z_sp500_return_1d__mul",
-          "correlation": -0.1464
+          "correlation": -0.1467
         },
         {
           "model_name": "lgbm_gpu_engineered",
@@ -3433,13 +3457,13 @@
           "model_name": "lgbm_gpu_engineered",
           "split": 4,
           "feature": "z_oil_return_60d",
-          "correlation": 0.091
+          "correlation": 0.0912
         },
         {
           "model_name": "lgbm_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_bollinger_width_20d__z_gold_return_7d__sub",
-          "correlation": -0.0579
+          "correlation": -0.058
         },
         {
           "model_name": "lgbm_gpu_engineered",
@@ -3451,7 +3475,7 @@
           "model_name": "lgbm_gpu_engineered",
           "split": 4,
           "feature": "z2_z_btc_bollinger_width_change_20d__z_btc_drawdown_change_60d__mul",
-          "correlation": -0.3093
+          "correlation": -0.3094
         },
         {
           "model_name": "lgbm_gpu_engineered",
@@ -4475,7 +4499,7 @@
       "name": "extra_trees_engineered",
       "model_type": "extra_trees_classifier",
       "status": "ok",
-      "message": "Engineered features with normalized first-order inputs and re-normalized second-order interactions. Best of 10 validation candidates selected before the latest two-year test; Sharpe target 2.0 not met on the latest two-year test.",
+      "message": "Engineered features with normalized first-order inputs and re-normalized second-order interactions. Best of 10 candidates selected by turnover-adjusted validation score before the latest two-year test; Sharpe target 2.0 not met on the latest two-year test.",
       "backtest_start": "2024-11-26",
       "backtest_end": "2026-04-17",
       "features": [
@@ -4883,6 +4907,7 @@
       "selected_candidate": "extra_trees_engineered_c10",
       "selected_candidate_index": 10,
       "candidate_count": 10,
+      "selected_validation_score": 1.279,
       "selected_hyperparameters": {
         "n_estimators": 620,
         "max_depth": null,
@@ -4923,7 +4948,8 @@
           "validation_trades": 47,
           "validation_total_transaction_cost_pct": 4.7,
           "validation_observations": 252,
-          "validation_active_observations": 36
+          "validation_active_observations": 36,
+          "validation_selection_score": 1.279
         },
         {
           "candidate_name": "extra_trees_engineered_c05",
@@ -4954,38 +4980,8 @@
           "validation_trades": 43,
           "validation_total_transaction_cost_pct": 4.3,
           "validation_observations": 252,
-          "validation_active_observations": 28
-        },
-        {
-          "candidate_name": "extra_trees_engineered_c06",
-          "candidate_index": 6,
-          "status": "ok",
-          "model_type": "extra_trees_classifier",
-          "selected_threshold": 0.54117,
-          "selected_short_threshold": 0.396998,
-          "selected_score_margin": 0.01,
-          "strategy_side": "long_short",
-          "hyperparameters": {
-            "n_estimators": 700,
-            "max_depth": 10,
-            "min_samples_leaf": 4,
-            "min_samples_split": 10,
-            "max_features": 0.68,
-            "bootstrap": false,
-            "random_state": 1906,
-            "n_jobs": -1
-          },
-          "validation_sharpe_ratio": 1.397,
-          "validation_gross_sharpe_ratio": 1.622,
-          "validation_win_rate_pct": 53.85,
-          "validation_total_return_pct": 33.862,
-          "validation_gross_total_return_pct": 41.105,
-          "validation_max_drawdown_pct": -7.625,
-          "validation_exposure_pct": 15.48,
-          "validation_trades": 53,
-          "validation_total_transaction_cost_pct": 5.3,
-          "validation_observations": 252,
-          "validation_active_observations": 39
+          "validation_active_observations": 28,
+          "validation_selection_score": 1.212
         },
         {
           "candidate_name": "extra_trees_engineered_c08",
@@ -5016,7 +5012,8 @@
           "validation_trades": 37,
           "validation_total_transaction_cost_pct": 3.7,
           "validation_observations": 252,
-          "validation_active_observations": 33
+          "validation_active_observations": 33,
+          "validation_selection_score": 0.948
         },
         {
           "candidate_name": "extra_trees_engineered_c02",
@@ -5047,131 +5044,8 @@
           "validation_trades": 32,
           "validation_total_transaction_cost_pct": 3.2,
           "validation_observations": 252,
-          "validation_active_observations": 18
-        },
-        {
-          "candidate_name": "extra_trees_engineered_c04",
-          "candidate_index": 4,
-          "status": "ok",
-          "model_type": "extra_trees_classifier",
-          "selected_threshold": 0.535593,
-          "selected_short_threshold": 0.409276,
-          "selected_score_margin": 0.02,
-          "strategy_side": "long_short",
-          "hyperparameters": {
-            "n_estimators": 580,
-            "max_depth": 8,
-            "min_samples_leaf": 6,
-            "min_samples_split": 14,
-            "max_features": 0.52,
-            "bootstrap": false,
-            "random_state": 1904,
-            "n_jobs": -1
-          },
-          "validation_sharpe_ratio": 1.272,
-          "validation_gross_sharpe_ratio": 1.492,
-          "validation_win_rate_pct": 52.78,
-          "validation_total_return_pct": 31.296,
-          "validation_gross_total_return_pct": 38.41,
-          "validation_max_drawdown_pct": -6.756,
-          "validation_exposure_pct": 14.29,
-          "validation_trades": 53,
-          "validation_total_transaction_cost_pct": 5.3,
-          "validation_observations": 252,
-          "validation_active_observations": 36
-        },
-        {
-          "candidate_name": "extra_trees_engineered_c03",
-          "candidate_index": 3,
-          "status": "ok",
-          "model_type": "extra_trees_classifier",
-          "selected_threshold": 0.534423,
-          "selected_short_threshold": null,
-          "selected_score_margin": 0.02,
-          "strategy_side": "long_only",
-          "hyperparameters": {
-            "n_estimators": 520,
-            "max_depth": 7,
-            "min_samples_leaf": 8,
-            "min_samples_split": 16,
-            "max_features": 0.45,
-            "bootstrap": false,
-            "random_state": 1903,
-            "n_jobs": -1
-          },
-          "validation_sharpe_ratio": 1.183,
-          "validation_gross_sharpe_ratio": 1.385,
-          "validation_win_rate_pct": 48.39,
-          "validation_total_return_pct": 26.016,
-          "validation_gross_total_return_pct": 31.781,
-          "validation_max_drawdown_pct": -8.641,
-          "validation_exposure_pct": 12.3,
-          "validation_trades": 45,
-          "validation_total_transaction_cost_pct": 4.5,
-          "validation_observations": 252,
-          "validation_active_observations": 31
-        },
-        {
-          "candidate_name": "extra_trees_engineered_c09",
-          "candidate_index": 9,
-          "status": "ok",
-          "model_type": "extra_trees_classifier",
-          "selected_threshold": 0.544345,
-          "selected_short_threshold": null,
-          "selected_score_margin": 0.0,
-          "strategy_side": "long_only",
-          "hyperparameters": {
-            "n_estimators": 820,
-            "max_depth": 6,
-            "min_samples_leaf": 9,
-            "min_samples_split": 18,
-            "max_features": 0.5,
-            "bootstrap": true,
-            "random_state": 1909,
-            "n_jobs": -1
-          },
-          "validation_sharpe_ratio": 1.169,
-          "validation_gross_sharpe_ratio": 1.37,
-          "validation_win_rate_pct": 51.22,
-          "validation_total_return_pct": 28.51,
-          "validation_gross_total_return_pct": 34.938,
-          "validation_max_drawdown_pct": -4.814,
-          "validation_exposure_pct": 16.27,
-          "validation_trades": 49,
-          "validation_total_transaction_cost_pct": 4.9,
-          "validation_observations": 252,
-          "validation_active_observations": 41
-        },
-        {
-          "candidate_name": "extra_trees_engineered_c01",
-          "candidate_index": 1,
-          "status": "ok",
-          "model_type": "extra_trees_classifier",
-          "selected_threshold": 0.547652,
-          "selected_short_threshold": 0.488721,
-          "selected_score_margin": 0.035,
-          "strategy_side": "long_short",
-          "hyperparameters": {
-            "n_estimators": 420,
-            "max_depth": 5,
-            "min_samples_leaf": 12,
-            "min_samples_split": 24,
-            "max_features": 0.32,
-            "bootstrap": false,
-            "random_state": 1901,
-            "n_jobs": -1
-          },
-          "validation_sharpe_ratio": 1.149,
-          "validation_gross_sharpe_ratio": 1.342,
-          "validation_win_rate_pct": 50.0,
-          "validation_total_return_pct": 19.185,
-          "validation_gross_total_return_pct": 23.161,
-          "validation_max_drawdown_pct": -8.784,
-          "validation_exposure_pct": 7.14,
-          "validation_trades": 33,
-          "validation_total_transaction_cost_pct": 3.3,
-          "validation_observations": 252,
-          "validation_active_observations": 18
+          "validation_active_observations": 18,
+          "validation_selection_score": 0.853
         },
         {
           "candidate_name": "extra_trees_engineered_c07",
@@ -5202,7 +5076,168 @@
           "validation_trades": 27,
           "validation_total_transaction_cost_pct": 2.7,
           "validation_observations": 252,
-          "validation_active_observations": 20
+          "validation_active_observations": 20,
+          "validation_selection_score": 0.761
+        },
+        {
+          "candidate_name": "extra_trees_engineered_c06",
+          "candidate_index": 6,
+          "status": "ok",
+          "model_type": "extra_trees_classifier",
+          "selected_threshold": 0.54117,
+          "selected_short_threshold": 0.396998,
+          "selected_score_margin": 0.01,
+          "strategy_side": "long_short",
+          "hyperparameters": {
+            "n_estimators": 700,
+            "max_depth": 10,
+            "min_samples_leaf": 4,
+            "min_samples_split": 10,
+            "max_features": 0.68,
+            "bootstrap": false,
+            "random_state": 1906,
+            "n_jobs": -1
+          },
+          "validation_sharpe_ratio": 1.397,
+          "validation_gross_sharpe_ratio": 1.622,
+          "validation_win_rate_pct": 53.85,
+          "validation_total_return_pct": 33.862,
+          "validation_gross_total_return_pct": 41.105,
+          "validation_max_drawdown_pct": -7.625,
+          "validation_exposure_pct": 15.48,
+          "validation_trades": 53,
+          "validation_total_transaction_cost_pct": 5.3,
+          "validation_observations": 252,
+          "validation_active_observations": 39,
+          "validation_selection_score": 0.731
+        },
+        {
+          "candidate_name": "extra_trees_engineered_c01",
+          "candidate_index": 1,
+          "status": "ok",
+          "model_type": "extra_trees_classifier",
+          "selected_threshold": 0.547652,
+          "selected_short_threshold": 0.488721,
+          "selected_score_margin": 0.035,
+          "strategy_side": "long_short",
+          "hyperparameters": {
+            "n_estimators": 420,
+            "max_depth": 5,
+            "min_samples_leaf": 12,
+            "min_samples_split": 24,
+            "max_features": 0.32,
+            "bootstrap": false,
+            "random_state": 1901,
+            "n_jobs": -1
+          },
+          "validation_sharpe_ratio": 1.149,
+          "validation_gross_sharpe_ratio": 1.342,
+          "validation_win_rate_pct": 50.0,
+          "validation_total_return_pct": 19.185,
+          "validation_gross_total_return_pct": 23.161,
+          "validation_max_drawdown_pct": -8.784,
+          "validation_exposure_pct": 7.14,
+          "validation_trades": 33,
+          "validation_total_transaction_cost_pct": 3.3,
+          "validation_observations": 252,
+          "validation_active_observations": 18,
+          "validation_selection_score": 0.645
+        },
+        {
+          "candidate_name": "extra_trees_engineered_c04",
+          "candidate_index": 4,
+          "status": "ok",
+          "model_type": "extra_trees_classifier",
+          "selected_threshold": 0.535593,
+          "selected_short_threshold": 0.409276,
+          "selected_score_margin": 0.02,
+          "strategy_side": "long_short",
+          "hyperparameters": {
+            "n_estimators": 580,
+            "max_depth": 8,
+            "min_samples_leaf": 6,
+            "min_samples_split": 14,
+            "max_features": 0.52,
+            "bootstrap": false,
+            "random_state": 1904,
+            "n_jobs": -1
+          },
+          "validation_sharpe_ratio": 1.272,
+          "validation_gross_sharpe_ratio": 1.492,
+          "validation_win_rate_pct": 52.78,
+          "validation_total_return_pct": 31.296,
+          "validation_gross_total_return_pct": 38.41,
+          "validation_max_drawdown_pct": -6.756,
+          "validation_exposure_pct": 14.29,
+          "validation_trades": 53,
+          "validation_total_transaction_cost_pct": 5.3,
+          "validation_observations": 252,
+          "validation_active_observations": 36,
+          "validation_selection_score": 0.58
+        },
+        {
+          "candidate_name": "extra_trees_engineered_c03",
+          "candidate_index": 3,
+          "status": "ok",
+          "model_type": "extra_trees_classifier",
+          "selected_threshold": 0.534423,
+          "selected_short_threshold": null,
+          "selected_score_margin": 0.02,
+          "strategy_side": "long_only",
+          "hyperparameters": {
+            "n_estimators": 520,
+            "max_depth": 7,
+            "min_samples_leaf": 8,
+            "min_samples_split": 16,
+            "max_features": 0.45,
+            "bootstrap": false,
+            "random_state": 1903,
+            "n_jobs": -1
+          },
+          "validation_sharpe_ratio": 1.183,
+          "validation_gross_sharpe_ratio": 1.385,
+          "validation_win_rate_pct": 48.39,
+          "validation_total_return_pct": 26.016,
+          "validation_gross_total_return_pct": 31.781,
+          "validation_max_drawdown_pct": -8.641,
+          "validation_exposure_pct": 12.3,
+          "validation_trades": 45,
+          "validation_total_transaction_cost_pct": 4.5,
+          "validation_observations": 252,
+          "validation_active_observations": 31,
+          "validation_selection_score": 0.544
+        },
+        {
+          "candidate_name": "extra_trees_engineered_c09",
+          "candidate_index": 9,
+          "status": "ok",
+          "model_type": "extra_trees_classifier",
+          "selected_threshold": 0.544345,
+          "selected_short_threshold": null,
+          "selected_score_margin": 0.0,
+          "strategy_side": "long_only",
+          "hyperparameters": {
+            "n_estimators": 820,
+            "max_depth": 6,
+            "min_samples_leaf": 9,
+            "min_samples_split": 18,
+            "max_features": 0.5,
+            "bootstrap": true,
+            "random_state": 1909,
+            "n_jobs": -1
+          },
+          "validation_sharpe_ratio": 1.169,
+          "validation_gross_sharpe_ratio": 1.37,
+          "validation_win_rate_pct": 51.22,
+          "validation_total_return_pct": 28.51,
+          "validation_gross_total_return_pct": 34.938,
+          "validation_max_drawdown_pct": -4.814,
+          "validation_exposure_pct": 16.27,
+          "validation_trades": 49,
+          "validation_total_transaction_cost_pct": 4.9,
+          "validation_observations": 252,
+          "validation_active_observations": 41,
+          "validation_selection_score": 0.544
         }
       ],
       "sharpe_target": 2.0,
@@ -5230,6 +5265,7 @@
       "validation_total_transaction_cost_pct": 4.7,
       "validation_observations": 252,
       "validation_active_observations": 36,
+      "validation_selection_score": 1.279,
       "sharpe_ratio": -0.567,
       "gross_sharpe_ratio": -0.375,
       "win_rate_pct": 48.72,
@@ -5562,13 +5598,13 @@
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z_oil_rolling_position_60d",
-          "correlation": 0.0003
+          "correlation": -0.0001
         },
         {
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z_btc_body_to_range",
-          "correlation": 0.0436
+          "correlation": 0.0437
         },
         {
           "model_name": "extra_trees_engineered",
@@ -5580,13 +5616,13 @@
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z2_z_btc_rolling_position_60d__z_btc_rsi_7__div",
-          "correlation": -0.0346
+          "correlation": -0.0344
         },
         {
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z_btc_close_location",
-          "correlation": -0.0428
+          "correlation": -0.0425
         },
         {
           "model_name": "extra_trees_engineered",
@@ -5598,25 +5634,25 @@
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z2_z_btc_bollinger_width_20d__z_gold_return_7d__sub",
-          "correlation": -0.0579
+          "correlation": -0.058
         },
         {
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z2_z_btc_rolling_position_7d__z_btc_rolling_position_60d__mul",
-          "correlation": 0.064
+          "correlation": 0.0645
         },
         {
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z_gold_rolling_position_60d",
-          "correlation": -0.0247
+          "correlation": -0.0249
         },
         {
           "model_name": "extra_trees_engineered",
           "split": 4,
           "feature": "z2_z_silver_return_7d__z_btc_nasdaq_rolling_corr_30d__add",
-          "correlation": 0.1062
+          "correlation": 0.1064
         }
       ],
       "equity_curve": [

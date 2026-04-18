@@ -22,6 +22,7 @@
 - Done: 2026-04-19 06:03 UTC Kaggle version 8 completed and outputs were downloaded. Experiment 003 selected a 0.075 score margin and slightly improved best net Sharpe to -0.111, but trades and transaction cost did not fall, and positive splits fell to 1/4. It is still not a package candidate.
 - Done: 2026-04-19 05:20 KST backend and frontend Docker services were rebuilt and restarted. The `/research/model-backtests` API now exposes the imported Experiment 003 Kaggle run with `selected_score_margin`.
 - Done: 2026-04-19 05:38 UTC Kaggle version 9 completed and outputs were downloaded. Experiment 004 ran 10 candidates per model family, but the best candidate worsened to net Sharpe -0.217 with 0/4 positive splits, so it is not a package candidate.
+- Done: 2026-04-19 05:54 UTC Kaggle version 10 completed and outputs were downloaded. Experiment 005 added turnover-adjusted validation scoring, but selected the same winners and kept best net Sharpe at -0.217, so it is not a package candidate.
 
 ### Pending Approvals
 
