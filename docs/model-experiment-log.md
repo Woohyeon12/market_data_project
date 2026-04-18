@@ -111,3 +111,14 @@ This log records each small model experiment so weak runs are not repeated and s
 - Package candidate: false.
 - Read: Dynamic count and full-pool base selection fixed the feature-selection implementation issue and materially improved the top model from -0.536 to -0.132 Sharpe. The model is still not sellable because costs turn a slightly positive gross edge into a negative net result, and split 4 remains a loss cluster.
 - Next hypothesis: Keep dynamic features, but change the threshold/regime layer to trade fewer low-margin candles and avoid late-period drawdown regimes. Candidate changes: validation-selected probability margin, stricter no-trade band, or a simple trend/drawdown regime gate.
+
+## 2026-04-19 06:05 KST - Experiment 003 Setup
+
+- Hypothesis: Experiment 002 found a slightly positive gross edge, but transaction costs pushed it negative. A validation-selected score margin should skip borderline trades and reduce cost drag.
+- Change: Keep the dynamic feature selector unchanged.
+- Change: Add score margin candidates `[0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1]` to threshold selection.
+- Change: Long trades require `score >= selected_long_threshold + selected_score_margin`; shorts, when enabled, require `score <= selected_short_threshold - selected_score_margin`.
+- Change: Validation ranking now breaks ties by fewer trades after Sharpe and total return, so equally good validation choices prefer lower churn.
+- UI/API: Add `selected_score_margin` to the backend schema and Models detail view.
+- Expected effect: Fewer low-margin entries, lower transaction cost drag, and less late-window damage if split 4 was driven by marginal signals.
+- Full backtest status: Pending Kaggle Experiment 003 run.

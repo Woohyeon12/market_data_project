@@ -214,6 +214,7 @@ export type KaggleModelResult = {
   interaction_source_count?: number | null;
   selected_threshold?: number | null;
   selected_short_threshold?: number | null;
+  selected_score_margin?: number | null;
   strategy_side?: string | null;
   validation_sharpe_ratio?: number | null;
   sharpe_target?: number | null;

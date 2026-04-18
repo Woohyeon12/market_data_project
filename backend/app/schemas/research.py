@@ -187,10 +187,11 @@ class KaggleModelResult(BaseModel):
     feature_count: int | None = None
     feature_candidate_count: int | None = None
     selected_feature_count: int | None = None
-    feature_selection: dict[str, float | int | str] = {}
+    feature_selection: dict[str, float | int | str | bool | None] = {}
     interaction_source_count: int | None = None
     selected_threshold: float | None = None
     selected_short_threshold: float | None = None
+    selected_score_margin: float | None = None
     strategy_side: str | None = None
     validation_sharpe_ratio: float | None = None
     sharpe_target: float | None = None
@@ -228,7 +229,7 @@ class KaggleModelRun(BaseModel):
     feature_candidate_count: int | None = None
     selected_feature_count: int | None = None
     final_feature_count: int | None = None
-    feature_selection: dict[str, float | int | str] = {}
+    feature_selection: dict[str, float | int | str | bool | None] = {}
     models: list[KaggleModelResult] = []
 
 

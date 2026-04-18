@@ -42,6 +42,7 @@ MIN_VALIDATION_TRADES = 18
 TRANSACTION_COST_BPS = 5.0
 SLIPPAGE_BPS = 5.0
 MIN_PACKAGE_ACTIVE_OBSERVATIONS = 40
+SCORE_MARGIN_CANDIDATES = [0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1]
 EPSILON = 1e-6
 
 
@@ -479,15 +480,19 @@ def backtest_from_scores(
     long_threshold: float,
     short_threshold: float | None = None,
     allow_short: bool = False,
+    score_margin: float = 0.0,
 ) -> pd.DataFrame:
     result = frame[["date", "target_return_1d", "high_volume_candle"]].copy()
     result["score"] = scores
     result["probability"] = scores
     high_volume = result["high_volume_candle"].to_numpy(dtype=bool)
     result["position"] = 0.0
-    result.loc[high_volume & (result["score"] >= long_threshold), "position"] = 1.0
+    effective_long_threshold = long_threshold + score_margin
+    effective_short_threshold = short_threshold - score_margin if short_threshold is not None else None
+    result.loc[high_volume & (result["score"] >= effective_long_threshold), "position"] = 1.0
     if allow_short and short_threshold is not None:
-        result.loc[high_volume & (result["score"] <= short_threshold), "position"] = -1.0
+        result.loc[high_volume & (result["score"] <= effective_short_threshold), "position"] = -1.0
+    result["score_margin"] = score_margin
     result["gross_strategy_return"] = result["position"] * result["target_return_1d"] / 100
     result["position_change"] = result["position"].diff().abs().fillna(result["position"].abs())
     result["transaction_cost"] = result["position_change"] * ((TRANSACTION_COST_BPS + SLIPPAGE_BPS) / 10000)
@@ -563,10 +568,10 @@ def package_gate(metrics: dict, split_metrics: list[dict], validation_metrics: d
     }
 
 
-def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[float, float | None, bool, dict]:
+def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[float, float | None, bool, float, dict]:
     high_volume_scores = scores[validation["high_volume_candle"].to_numpy(dtype=bool)]
     if len(high_volume_scores) == 0:
-        return float(np.nanmean(scores)), None, False, {"validation_sharpe_ratio": 0.0}
+        return float(np.nanmean(scores)), None, False, 0.0, {"validation_sharpe_ratio": 0.0}
 
     long_quantiles = np.linspace(0.52, 0.97, 20)
     short_quantiles = np.linspace(0.03, 0.42, 18)
@@ -575,39 +580,48 @@ def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[flo
     best_long = long_candidates[0]
     best_short = None
     best_allow_short = False
+    best_margin = 0.0
     best_metrics = {"sharpe_ratio": -999.0, "total_return_pct": -999.0, "active_observations": 0}
 
     for long_threshold in long_candidates:
-        result = backtest_from_scores(validation, scores, long_threshold)
-        metrics = metrics_for(result)
-        if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-            continue
-        if (metrics["sharpe_ratio"], metrics["total_return_pct"]) > (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"]):
-            best_long = long_threshold
-            best_short = None
-            best_allow_short = False
-            best_metrics = metrics
+        for score_margin in SCORE_MARGIN_CANDIDATES:
+            result = backtest_from_scores(validation, scores, long_threshold, score_margin=score_margin)
+            metrics = metrics_for(result)
+            if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                continue
+            candidate_rank = (metrics["sharpe_ratio"], metrics["total_return_pct"], -metrics["trades"])
+            best_rank = (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"], -best_metrics.get("trades", 0))
+            if candidate_rank > best_rank:
+                best_long = long_threshold
+                best_short = None
+                best_allow_short = False
+                best_margin = score_margin
+                best_metrics = metrics
 
     for long_threshold in long_candidates:
         for short_threshold in short_candidates:
             if short_threshold >= long_threshold:
                 continue
-            result = backtest_from_scores(validation, scores, long_threshold, short_threshold, allow_short=True)
-            metrics = metrics_for(result)
-            if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-                continue
-            if (metrics["sharpe_ratio"], metrics["total_return_pct"]) > (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"]):
-                best_long = long_threshold
-                best_short = short_threshold
-                best_allow_short = True
-                best_metrics = metrics
+            for score_margin in SCORE_MARGIN_CANDIDATES:
+                result = backtest_from_scores(validation, scores, long_threshold, short_threshold, allow_short=True, score_margin=score_margin)
+                metrics = metrics_for(result)
+                if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                    continue
+                candidate_rank = (metrics["sharpe_ratio"], metrics["total_return_pct"], -metrics["trades"])
+                best_rank = (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"], -best_metrics.get("trades", 0))
+                if candidate_rank > best_rank:
+                    best_long = long_threshold
+                    best_short = short_threshold
+                    best_allow_short = True
+                    best_margin = score_margin
+                    best_metrics = metrics
 
     if best_metrics["sharpe_ratio"] == -999.0:
         best_long = float(np.nanquantile(high_volume_scores, 0.80))
         best_metrics = metrics_for(backtest_from_scores(validation, scores, best_long))
 
     best_metrics = {f"validation_{key}": value for key, value in best_metrics.items()}
-    return float(best_long), float(best_short) if best_short is not None else None, best_allow_short, best_metrics
+    return float(best_long), float(best_short) if best_short is not None else None, best_allow_short, float(best_margin), best_metrics
 
 
 def feature_importance(model, feature_cols: list[str], train_x: pd.DataFrame, train_y: pd.Series) -> list[dict]:
@@ -719,7 +733,7 @@ def run():
                 model_type,
             )
             validation_scores = predict_signal(validation_model, validation[feature_cols])
-            long_threshold, short_threshold, allow_short, validation_metrics = select_thresholds(validation, validation_scores)
+            long_threshold, short_threshold, allow_short, score_margin, validation_metrics = select_thresholds(validation, validation_scores)
 
             final_model, final_model_type = fit_model(
                 factory,
@@ -728,7 +742,7 @@ def run():
                 validation_model_type,
             )
             scores = predict_signal(final_model, test[feature_cols])
-            result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short)
+            result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short, score_margin)
             metrics = metrics_for(result)
             importances = feature_importance(final_model, feature_cols, train_full_high_volume[feature_cols], train_full_high_volume["target_up"])
             split_metrics, correlations = split_analysis(name, result, test, feature_cols, importances)
@@ -740,7 +754,7 @@ def run():
                 "status": "ok",
                 "message": (
                     f"Engineered features with normalized first-order inputs and re-normalized second-order interactions. "
-                    f"Validation-selected threshold; Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
+                    f"Validation-selected threshold and score margin; Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
                 ),
                 "backtest_start": str(test["date"].iloc[0]),
                 "backtest_end": str(test["date"].iloc[-1]),
@@ -764,6 +778,7 @@ def run():
                 "interaction_source_count": len(interaction_sources),
                 "selected_threshold": round(float(long_threshold), 6),
                 "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
+                "selected_score_margin": round(float(score_margin), 6),
                 "strategy_side": "long_short" if allow_short else "long_only",
                 "sharpe_target": SHARPE_TARGET,
                 "target_met": target_met,

@@ -557,6 +557,7 @@ type ShowcaseModel = {
   selectedBaseFloorMet?: boolean | null;
   selectedThreshold?: number | null;
   selectedShortThreshold?: number | null;
+  selectedScoreMargin?: number | null;
   strategySide?: string | null;
   validationSharpeRatio?: number | null;
   sharpeTarget?: number | null;
@@ -806,6 +807,7 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     selectedBaseFloorMet: featureSelectionBoolean(model.feature_selection, "selected_base_floor_met"),
     selectedThreshold: model.selected_threshold,
     selectedShortThreshold: model.selected_short_threshold,
+    selectedScoreMargin: model.selected_score_margin,
     strategySide: model.strategy_side,
     validationSharpeRatio: model.validation_sharpe_ratio,
     sharpeTarget: model.sharpe_target,
@@ -1718,6 +1720,14 @@ export function ResearchDashboard() {
                     <strong>
                       {selectedModel.selectedThreshold !== null && selectedModel.selectedThreshold !== undefined ? selectedModel.selectedThreshold.toFixed(4) : "n/a"}
                       {selectedModel.selectedShortThreshold !== null && selectedModel.selectedShortThreshold !== undefined ? ` / ${selectedModel.selectedShortThreshold.toFixed(4)}` : ""}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Score margin</span>
+                    <strong>
+                      {selectedModel.selectedScoreMargin !== null && selectedModel.selectedScoreMargin !== undefined
+                        ? selectedModel.selectedScoreMargin.toFixed(3)
+                        : "n/a"}
                     </strong>
                   </div>
                   <div>
