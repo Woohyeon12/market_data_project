@@ -156,3 +156,24 @@ This log records each small model experiment so weak runs are not repeated and s
 - UI/API: Model results now expose `candidate_count`, `selected_candidate`, `selected_candidate_index`, `selected_hyperparameters`, and `candidate_trials`; the Models detail panel shows the selected candidate as best-of-10.
 - Expected effect: Better hyperparameter coverage without selecting directly on the test window. If it improves validation but not test, the log should treat that as instability rather than a sellable result.
 - Full backtest status: Pending Kaggle Experiment 004 run.
+
+## 2026-04-19 05:38 UTC - Experiment 004 Result
+
+- Kaggle version: 9.
+- Candidate plan: 10 LightGBM, 10 XGBoost, and 10 ExtraTrees candidates; one validation-selected winner per model family.
+- Selected features: 360.
+- Best model: `xgb_gpu_engineered`.
+- Selected candidate: `xgb_gpu_engineered_c03`.
+- Candidate count: 10 for the winning model, 30 total.
+- Net Sharpe: -0.217.
+- Gross Sharpe: 0.046.
+- Net total return: -10.397%.
+- Gross total return: -1.550%.
+- Win rate: 47.37%.
+- Max drawdown: -20.750%.
+- Trades: 94.
+- Total transaction cost: 9.400%.
+- Positive splits: 0/4.
+- Package candidate: false.
+- Read: The 10-candidate search ran correctly but worsened versus Experiment 003, where the best net Sharpe was -0.111. More hyperparameter candidates did not fix turnover or the late-window drawdown cluster. The validation-selected candidate reduced max drawdown versus Exp3 but lost gross edge and had zero positive test splits.
+- Next hypothesis: Keep the 10-candidate infrastructure, but change the validation ranking from mostly Sharpe-first to a turnover-adjusted validation score that penalizes transaction cost and trades before the final test. Do not choose by the test result.
