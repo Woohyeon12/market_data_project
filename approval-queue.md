@@ -12,7 +12,7 @@
 - Done: Backend rebuilt and restarted so `/research/model-backtests` now returns one Kaggle run with 3 engineered models and four split metrics for each model.
 - Done: Frontend production server restarted on `http://localhost:3000`.
 - Done: 2026-04-18 09:15 KST approval cleared the frontend build and Docker refresh. `npm.cmd run build` passed and `docker compose up -d --build frontend` restarted the app with the Models readiness gate.
-- Done: 2026-04-18 09:15 KST Git access is available again; readiness UI and regime validation plan are ready to commit and push.
+- Done: 2026-04-18 09:15 KST Git access is available again; readiness UI and regime validation plan were committed and pushed in `5e95856`.
 
 ### Pending Approvals
 
