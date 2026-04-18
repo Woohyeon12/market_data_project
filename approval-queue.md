@@ -15,13 +15,11 @@
 - Done: 2026-04-18 09:15 KST Git access is available again; readiness UI and regime validation plan were committed and pushed in `5e95856`.
 - Done: 2026-04-18 10:50 KST approval cleared the package-gate metrics build and Docker refresh. `npm.cmd run build` passed and `docker compose up -d --build backend frontend` restarted both services.
 - Done: 2026-04-18 11:03 KST implemented the lower-overfit 200-feature selection pipeline and rebuilt Docker locally. The running dashboard still shows the previous 2,325-feature Kaggle result until a fresh Kaggle run is launched and downloaded.
+- Done: 2026-04-18 23:05 KST Kaggle authentication was restored, kernel version 5 completed, and the fresh roughly 200-feature low-correlation result was downloaded. The dashboard API now reports 200 selected features from 2,146 candidates; best model was `extra_trees_engineered` with Sharpe -0.553, so it is not a package candidate.
 
 ### Pending Approvals
 
-1. Fresh Kaggle GPU run for the 200-feature low-correlation model
-   - Why: No Kaggle credential is available in this session, so the updated pipeline could not be pushed to Kaggle yet.
-   - Command: authenticate Kaggle, then run `kaggle kernels push -p kaggle\volume_boosting_gpu` and `kaggle kernels output seowoohyeon/btc-volume-boosting-gpu-backtest -p backend\model_registry\kaggle_runs --force`
-   - Expected result: The Models page replaces the previous 2,325-feature run with the new roughly 200-feature low-correlation run.
+- None.
 
 ### User Security Action
 

@@ -94,11 +94,11 @@ The folder `kaggle/volume_boosting_gpu` contains a Kaggle notebook script for hi
 
 See `docs/model-regime-validation-plan.md` for the regime filter, walk-forward, and package-candidate gates that should be added before treating a model as sellable.
 
-Run from the repo root after authenticating Kaggle in the current shell:
+Run from the repo root after authenticating Kaggle. The helper reads `KAGGLE_API_TOKEN` from the current process or Windows user environment and injects it only for the Kaggle CLI process:
 
 ```powershell
-kaggle kernels push -p kaggle\volume_boosting_gpu
-kaggle kernels output seowoohyeon/btc-volume-boosting-gpu-backtest -p backend\model_registry\kaggle_runs --force
+.\scripts\kaggle.ps1 kernels push -p kaggle\volume_boosting_gpu
+.\scripts\kaggle.ps1 kernels output seowoohyeon/btc-volume-boosting-gpu-backtest -p backend\model_registry\kaggle_runs --force
 ```
 
 Do not commit Kaggle tokens. If a token was pasted into chat or logs, rotate it in Kaggle before relying on it for ongoing automation.
