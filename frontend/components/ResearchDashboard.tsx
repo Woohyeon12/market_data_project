@@ -552,6 +552,9 @@ type ShowcaseModel = {
   featureCount?: number | null;
   featureCandidateCount?: number | null;
   selectedFeatureCount?: number | null;
+  selectedBaseFeatureCount?: number | null;
+  selectedInteractionFeatureCount?: number | null;
+  selectedBaseFloorMet?: boolean | null;
   selectedThreshold?: number | null;
   selectedShortThreshold?: number | null;
   strategySide?: string | null;
@@ -583,6 +586,25 @@ function stabilityLabel(score: number) {
   }
 
   return "Fragile";
+}
+
+function featureSelectionNumber(selection: KaggleModelResult["feature_selection"], key: string) {
+  const value = selection?.[key];
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+}
+
+function featureSelectionBoolean(selection: KaggleModelResult["feature_selection"], key: string) {
+  const value = selection?.[key];
+  return typeof value === "boolean" ? value : null;
 }
 
 function buildStabilityScore(model: {
@@ -779,6 +801,9 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     featureCount: model.feature_count,
     featureCandidateCount: model.feature_candidate_count,
     selectedFeatureCount: model.selected_feature_count,
+    selectedBaseFeatureCount: featureSelectionNumber(model.feature_selection, "selected_base_feature_count"),
+    selectedInteractionFeatureCount: featureSelectionNumber(model.feature_selection, "selected_interaction_feature_count"),
+    selectedBaseFloorMet: featureSelectionBoolean(model.feature_selection, "selected_base_floor_met"),
     selectedThreshold: model.selected_threshold,
     selectedShortThreshold: model.selected_short_threshold,
     strategySide: model.strategy_side,
@@ -1657,6 +1682,36 @@ export function ResearchDashboard() {
                   <div>
                     <span>Candidate pool</span>
                     <strong>{selectedModel.featureCandidateCount?.toLocaleString() ?? "n/a"}</strong>
+                  </div>
+                  <div>
+                    <span>Base / interaction</span>
+                    <strong>
+                      {selectedModel.selectedBaseFeatureCount !== null && selectedModel.selectedBaseFeatureCount !== undefined
+                        ? selectedModel.selectedBaseFeatureCount.toLocaleString()
+                        : "n/a"}
+                      {" / "}
+                      {selectedModel.selectedInteractionFeatureCount !== null && selectedModel.selectedInteractionFeatureCount !== undefined
+                        ? selectedModel.selectedInteractionFeatureCount.toLocaleString()
+                        : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Base floor</span>
+                    <strong
+                      className={
+                        selectedModel.selectedBaseFloorMet === null || selectedModel.selectedBaseFloorMet === undefined
+                          ? ""
+                          : selectedModel.selectedBaseFloorMet
+                            ? "change-positive"
+                            : "change-negative"
+                      }
+                    >
+                      {selectedModel.selectedBaseFloorMet === null || selectedModel.selectedBaseFloorMet === undefined
+                        ? "not recorded"
+                        : selectedModel.selectedBaseFloorMet
+                          ? "met"
+                          : "missed"}
+                    </strong>
                   </div>
                   <div>
                     <span>Signal threshold</span>

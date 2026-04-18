@@ -16,10 +16,11 @@
 - Done: 2026-04-18 10:50 KST approval cleared the package-gate metrics build and Docker refresh. `npm.cmd run build` passed and `docker compose up -d --build backend frontend` restarted both services.
 - Done: 2026-04-18 11:03 KST implemented the lower-overfit 200-feature selection pipeline and rebuilt Docker locally. The running dashboard still shows the previous 2,325-feature Kaggle result until a fresh Kaggle run is launched and downloaded.
 - Done: 2026-04-18 23:05 KST Kaggle authentication was restored, kernel version 5 completed, and the fresh roughly 200-feature low-correlation result was downloaded. The dashboard API now reports 200 selected features from 2,146 candidates; best model was `extra_trees_engineered` with Sharpe -0.553, so it is not a package candidate.
+- Done: 2026-04-19 04:35 KST permission refresh cleared the local blockers. Git staging succeeded, Kaggle status check authenticated through `scripts/kaggle.cmd`, `npm.cmd run build` passed, and Python compile checks passed.
 
 ### Pending Approvals
 
-- None.
+- None for local validation. Next blocking point, if any, will be the Kaggle Experiment 001 run itself.
 
 ### User Security Action
 

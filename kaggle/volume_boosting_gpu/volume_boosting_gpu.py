@@ -33,6 +33,7 @@ INTERACTION_FEATURE_LIMIT = 32
 FINAL_FEATURE_LIMIT = 200
 FEATURE_PREFILTER_LIMIT = 900
 MAX_FEATURE_CORRELATION = 0.68
+MIN_SELECTED_BASE_FEATURES = 60
 SHARPE_TARGET = 2.0
 MIN_VALIDATION_TRADES = 18
 TRANSACTION_COST_BPS = 5.0
@@ -286,23 +287,34 @@ def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, b
     ranked = target_scores.sort_values(ascending=False)
     candidates = ranked.index[:min(FEATURE_PREFILTER_LIMIT, len(ranked))].tolist()
     candidate_corr = features[candidates].corr().abs().replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    base_candidates = [column for column in candidates if column.startswith("z_")]
     selected: list[str] = []
     selected_set: set[str] = set()
 
-    for max_corr_allowed in [MAX_FEATURE_CORRELATION, 0.78, 0.88, 0.96, 1.01]:
-        for column in candidates:
-            if column in selected_set:
-                continue
-            if not selected:
-                selected.append(column)
-                selected_set.add(column)
-                continue
+    def selected_base_count() -> int:
+        return sum(1 for column in selected if column.startswith("z_"))
 
+    def try_add(column: str, max_corr_allowed: float) -> None:
+        if column in selected_set or len(selected) >= FINAL_FEATURE_LIMIT:
+            return
+        if selected:
             max_corr = float(candidate_corr.loc[column, selected].max())
-            if max_corr <= max_corr_allowed:
-                selected.append(column)
-                selected_set.add(column)
+            if max_corr > max_corr_allowed:
+                return
+        selected.append(column)
+        selected_set.add(column)
 
+    for max_corr_allowed in [MAX_FEATURE_CORRELATION, 0.78, 0.88, 0.96, 1.01]:
+        for column in base_candidates:
+            if selected_base_count() >= MIN_SELECTED_BASE_FEATURES:
+                break
+            try_add(column, max_corr_allowed)
+
+        if len(selected) >= FINAL_FEATURE_LIMIT:
+            break
+
+        for column in candidates:
+            try_add(column, max_corr_allowed)
             if len(selected) >= FINAL_FEATURE_LIMIT:
                 break
 
@@ -318,13 +330,15 @@ def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, b
         max_pairwise_corr = 0.0
 
     summary = {
-        "method": "target-ranked greedy low-correlation selection on pre-test training data",
+        "method": "target-ranked greedy low-correlation selection with base-feature floor on pre-test training data",
         "candidate_feature_count": int(features.shape[1]),
         "prefilter_feature_count": int(len(candidates)),
         "selected_feature_count": int(len(selected)),
         "base_feature_count": int(base_feature_count),
         "selected_base_feature_count": int(sum(1 for column in selected if column.startswith("z_"))),
         "selected_interaction_feature_count": int(sum(1 for column in selected if column.startswith("z2_"))),
+        "min_selected_base_features": int(MIN_SELECTED_BASE_FEATURES),
+        "selected_base_floor_met": selected_base_count() >= min(MIN_SELECTED_BASE_FEATURES, len(base_candidates)),
         "max_allowed_pairwise_correlation": MAX_FEATURE_CORRELATION,
         "observed_max_pairwise_correlation": round(max_pairwise_corr, 4),
         "mean_abs_target_correlation": round(float(target_scores[selected].mean()), 5) if selected else 0.0,

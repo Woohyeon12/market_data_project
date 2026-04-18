@@ -1,0 +1,61 @@
+# Model Experiment Log
+
+This log records each small model experiment so weak runs are not repeated and strong runs can be reproduced.
+
+## Best Confirmed Result So Far
+
+- Run: `btc_volume_boosting_gpu_latest`, generated 2026-04-18 14:04 UTC.
+- Candidate pool: 2,146 normalized first-order and second-order features.
+- Selected features: 200.
+- Best model: `extra_trees_engineered`.
+- Net Sharpe: -0.553.
+- Gross Sharpe: -0.343.
+- Net total return: -25.258%.
+- Package candidate: false.
+- Read: Lowering feature count reduced bloat, but selecting 191 interaction features and only 9 base features likely kept too much synthetic overfit risk.
+
+## 2026-04-18 23:30 KST - Experiment 001
+
+- Hypothesis: The latest 200-feature run overfit because the low-correlation selector allowed interactions to dominate the final set.
+- Change: Added a base-feature floor so the selector tries to keep at least 60 normalized first-order features before filling the remaining slots with interactions.
+- Files changed: `kaggle/volume_boosting_gpu/volume_boosting_gpu.py`.
+- Expected effect: More direct market, volume, trend, volatility, yield, and cross-asset context reaches the models; interaction features remain useful but cannot crowd out base signals.
+- Validation done: Python compile check.
+- Full backtest status: Not run in this heartbeat. Next run should push the Kaggle kernel, download outputs, and compare Sharpe, return, drawdown, split stability, selected base count, and selected interaction count against the 2026-04-18 14:04 UTC run.
+
+## 2026-04-18 23:50 KST - Experiment Infrastructure
+
+- Observation: The heartbeat environment blocked `scripts/kaggle.ps1` with the local PowerShell execution policy before Kaggle status could be checked.
+- Change: Added `scripts/kaggle.cmd`, which reads the user-level `KAGGLE_API_TOKEN` without writing secrets to disk and then calls the Kaggle CLI.
+- Expected effect: Future 15-minute model experiments can check kernel status, push runs, and download outputs even when `.ps1` execution is blocked.
+- Validation done: Wrapper was executed, but the current heartbeat sandbox cannot see `KAGGLE_API_TOKEN` in either the process or user environment, so Kaggle status is still blocked until auth is restored for this sandbox identity.
+- Experiment discipline: Do not stack another modeling change on top of Experiment 001 until the base-feature-floor run is pushed, completed, and downloaded.
+
+## 2026-04-19 00:08 KST - Execution Check
+
+- Check: `KAGGLE_API_TOKEN` is still absent from both process and user environment in the active heartbeat sandbox.
+- Check: `scripts/kaggle.cmd kernels status seowoohyeon/btc-volume-boosting-gpu-backtest` still stops before Kaggle because auth is unavailable.
+- Check: Git still cannot create `.git/index.lock`, so local changes cannot be committed from this sandbox identity.
+- Decision: Do not add Experiment 002 yet. The next useful experiment remains running Experiment 001 on Kaggle after auth and Git access are restored.
+
+## 2026-04-19 00:25 KST - UI Auditability Pass
+
+- Change: The Models showcase now surfaces selected base feature count, selected interaction feature count, and whether the base-feature floor was recorded as met.
+- Why: The current imported run selected only 9 base features and 191 interaction features, so the overfit hypothesis should be visible in the product UI, not only in code notes.
+- Validation done: Frontend TypeScript check and Kaggle script compile check.
+- Full backtest status: Still blocked by missing Kaggle auth in the heartbeat sandbox. No new model experiment was stacked on top of Experiment 001.
+
+## 2026-04-19 00:44 KST - Validation Check
+
+- Check: `KAGGLE_API_TOKEN` is still absent from process and user environment in the active heartbeat sandbox.
+- Check: `scripts/kaggle.cmd kernels status seowoohyeon/btc-volume-boosting-gpu-backtest` still stops before contacting Kaggle because auth is unavailable.
+- Validation done: `npm.cmd exec tsc -- --noEmit`, `py -m py_compile`, `git diff --check`, and repo token-string scan.
+- Blocked: `npm.cmd run build` failed with `spawn EPERM`, and Git still cannot create `.git/index.lock`.
+- Decision: Keep Experiment 001 as the next model action. Do not start Experiment 002 until the base-feature-floor Kaggle run is completed and downloaded.
+
+## 2026-04-19 04:35 KST - Permission Refresh
+
+- Check: `scripts/kaggle.cmd kernels status seowoohyeon/btc-volume-boosting-gpu-backtest` authenticated and returned `COMPLETE`.
+- Check: Git staging succeeded after the permission refresh.
+- Validation done: `npm.cmd run build` and `py -m py_compile`.
+- Decision: Commit and push the base-feature-floor experiment plus the Models UI auditability pass, then launch Experiment 001 on Kaggle.

@@ -210,7 +210,7 @@ export type KaggleModelResult = {
   feature_count?: number | null;
   feature_candidate_count?: number | null;
   selected_feature_count?: number | null;
-  feature_selection?: Record<string, number | string>;
+  feature_selection?: Record<string, number | string | boolean | null>;
   interaction_source_count?: number | null;
   selected_threshold?: number | null;
   selected_short_threshold?: number | null;
@@ -251,7 +251,7 @@ export type KaggleModelRun = {
   feature_candidate_count?: number | null;
   selected_feature_count?: number | null;
   final_feature_count?: number | null;
-  feature_selection?: Record<string, number | string>;
+  feature_selection?: Record<string, number | string | boolean | null>;
   models: KaggleModelResult[];
 };
 

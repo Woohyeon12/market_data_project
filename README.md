@@ -87,7 +87,7 @@ The folder `kaggle/volume_boosting_gpu` contains a Kaggle notebook script for hi
 - It evaluates the latest two years in four chronological splits.
 - It compares only LightGBM, XGBoost, and ExtraTrees engineered models.
 - It normalizes first-order variables such as volume, trend flags, rolling values, RSI, candle size, 7/30-day lags, Bollinger Bands, cross-asset returns, volatility regimes, yield spreads, and golden-cross signals.
-- It creates arithmetic second-order features from selected normalized variables, re-normalizes those interaction features, then keeps about 200 target-relevant features with low pairwise correlation to reduce overfitting.
+- It creates arithmetic second-order features from selected normalized variables, re-normalizes those interaction features, then keeps about 200 target-relevant features with low pairwise correlation and a base-feature floor to reduce interaction overfit.
 - It selects long-only or long/short signal thresholds from a pre-test validation window and records whether the latest two-year Sharpe meets the research target.
 - It calculates net performance after transaction cost and slippage assumptions, then records rejection reasons when package-candidate gates fail.
 - It writes `run_summary.json`, split metrics, correlations, feature importance, and predictions.
@@ -99,6 +99,14 @@ Run from the repo root after authenticating Kaggle. The helper reads `KAGGLE_API
 ```powershell
 .\scripts\kaggle.ps1 kernels push -p kaggle\volume_boosting_gpu
 .\scripts\kaggle.ps1 kernels output seowoohyeon/btc-volume-boosting-gpu-backtest -p backend\model_registry\kaggle_runs --force
+```
+
+If PowerShell blocks local scripts, use the command-file wrapper instead:
+
+```powershell
+.\scripts\kaggle.cmd kernels status seowoohyeon/btc-volume-boosting-gpu-backtest
+.\scripts\kaggle.cmd kernels push -p kaggle\volume_boosting_gpu
+.\scripts\kaggle.cmd kernels output seowoohyeon/btc-volume-boosting-gpu-backtest -p backend\model_registry\kaggle_runs --force
 ```
 
 Do not commit Kaggle tokens. If a token was pasted into chat or logs, rotate it in Kaggle before relying on it for ongoing automation.

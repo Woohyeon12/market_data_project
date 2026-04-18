@@ -50,3 +50,4 @@ A model can be labeled `Package candidate` only when all checks pass:
 4. Done in script: add a rejection reason list into `run_summary.json`.
 5. Done in script: reduce the broad normalized and second-order feature pool to about 200 low-correlation selected features before fitting.
 6. Partly done in UI contract: surface package readiness, cost drag, gross Sharpe, worst split Sharpe, selected feature count, candidate pool size, and rejection reasons on the Models page after the next Kaggle run includes those fields.
+7. Current experiment: enforce a base-feature floor during low-correlation feature selection so second-order synthetic variables cannot dominate the final 200-feature set.
