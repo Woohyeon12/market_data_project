@@ -558,6 +558,8 @@ type ShowcaseModel = {
   selectedThreshold?: number | null;
   selectedShortThreshold?: number | null;
   selectedScoreMargin?: number | null;
+  selectedMinHoldDays?: number | null;
+  selectedCooldownDays?: number | null;
   strategySide?: string | null;
   selectedCandidate?: string | null;
   selectedCandidateIndex?: number | null;
@@ -812,6 +814,8 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     selectedThreshold: model.selected_threshold,
     selectedShortThreshold: model.selected_short_threshold,
     selectedScoreMargin: model.selected_score_margin,
+    selectedMinHoldDays: model.selected_min_hold_days,
+    selectedCooldownDays: model.selected_cooldown_days,
     strategySide: model.strategy_side,
     selectedCandidate: model.selected_candidate,
     selectedCandidateIndex: model.selected_candidate_index,
@@ -1736,6 +1740,14 @@ export function ResearchDashboard() {
                       {selectedModel.selectedScoreMargin !== null && selectedModel.selectedScoreMargin !== undefined
                         ? selectedModel.selectedScoreMargin.toFixed(3)
                         : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Turnover rule</span>
+                    <strong>
+                      {selectedModel.selectedMinHoldDays || selectedModel.selectedCooldownDays
+                        ? `hold ${selectedModel.selectedMinHoldDays ?? 1}d / cool ${selectedModel.selectedCooldownDays ?? 0}d`
+                        : "none"}
                     </strong>
                   </div>
                   <div>

@@ -48,6 +48,16 @@ VALIDATION_RETURN_WEIGHT = 0.015
 VALIDATION_DRAWDOWN_WEIGHT = 0.015
 VALIDATION_COST_PENALTY = 0.08
 VALIDATION_TRADE_PENALTY = 0.012
+TURNOVER_RULE_CANDIDATES = [
+    {"min_hold_days": 1, "cooldown_days": 0},
+    {"min_hold_days": 2, "cooldown_days": 0},
+    {"min_hold_days": 3, "cooldown_days": 0},
+    {"min_hold_days": 1, "cooldown_days": 1},
+    {"min_hold_days": 2, "cooldown_days": 1},
+    {"min_hold_days": 3, "cooldown_days": 1},
+    {"min_hold_days": 1, "cooldown_days": 2},
+    {"min_hold_days": 2, "cooldown_days": 2},
+]
 EPSILON = 1e-6
 
 
@@ -518,18 +528,55 @@ def backtest_from_scores(
     short_threshold: float | None = None,
     allow_short: bool = False,
     score_margin: float = 0.0,
+    min_hold_days: int = 1,
+    cooldown_days: int = 0,
 ) -> pd.DataFrame:
     result = frame[["date", "target_return_1d", "high_volume_candle"]].copy()
     result["score"] = scores
     result["probability"] = scores
     high_volume = result["high_volume_candle"].to_numpy(dtype=bool)
-    result["position"] = 0.0
     effective_long_threshold = long_threshold + score_margin
     effective_short_threshold = short_threshold - score_margin if short_threshold is not None else None
-    result.loc[high_volume & (result["score"] >= effective_long_threshold), "position"] = 1.0
+    raw_position = np.zeros(len(result), dtype=float)
+    raw_position[high_volume & (result["score"].to_numpy(dtype=float) >= effective_long_threshold)] = 1.0
     if allow_short and short_threshold is not None:
-        result.loc[high_volume & (result["score"] <= effective_short_threshold), "position"] = -1.0
+        raw_position[high_volume & (result["score"].to_numpy(dtype=float) <= effective_short_threshold)] = -1.0
+
+    positions = np.zeros(len(result), dtype=float)
+    current_position = 0.0
+    hold_remaining = 0
+    cooldown_remaining = 0
+    min_hold_days = max(1, int(min_hold_days))
+    cooldown_days = max(0, int(cooldown_days))
+
+    for index, desired_position in enumerate(raw_position):
+        if current_position != 0:
+            if hold_remaining > 0:
+                positions[index] = current_position
+                hold_remaining -= 1
+                continue
+            if desired_position == current_position:
+                positions[index] = current_position
+                continue
+            current_position = 0.0
+            cooldown_remaining = cooldown_days
+            positions[index] = 0.0
+            continue
+
+        if cooldown_remaining > 0:
+            cooldown_remaining -= 1
+            positions[index] = 0.0
+            continue
+
+        if desired_position != 0:
+            current_position = desired_position
+            hold_remaining = min_hold_days - 1
+            positions[index] = current_position
+
+    result["position"] = positions
     result["score_margin"] = score_margin
+    result["min_hold_days"] = min_hold_days
+    result["cooldown_days"] = cooldown_days
     result["gross_strategy_return"] = result["position"] * result["target_return_1d"] / 100
     result["position_change"] = result["position"].diff().abs().fillna(result["position"].abs())
     result["transaction_cost"] = result["position_change"] * ((TRANSACTION_COST_BPS + SLIPPAGE_BPS) / 10000)
@@ -605,10 +652,20 @@ def package_gate(metrics: dict, split_metrics: list[dict], validation_metrics: d
     }
 
 
-def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[float, float | None, bool, float, dict]:
+def threshold_rank(metrics: dict) -> tuple[float, float, float, float, int]:
+    return (
+        float(metrics.get("sharpe_ratio", -999.0)),
+        float(metrics.get("total_return_pct", -999.0)),
+        float(metrics.get("max_drawdown_pct", -999.0)),
+        -float(metrics.get("total_transaction_cost_pct", 999.0)),
+        -int(metrics.get("trades", 999999)),
+    )
+
+
+def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[float, float | None, bool, float, int, int, dict]:
     high_volume_scores = scores[validation["high_volume_candle"].to_numpy(dtype=bool)]
     if len(high_volume_scores) == 0:
-        return float(np.nanmean(scores)), None, False, 0.0, {"validation_sharpe_ratio": 0.0}
+        return float(np.nanmean(scores)), None, False, 0.0, 1, 0, {"validation_sharpe_ratio": 0.0}
 
     long_quantiles = np.linspace(0.52, 0.97, 20)
     short_quantiles = np.linspace(0.03, 0.42, 18)
@@ -618,47 +675,59 @@ def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[flo
     best_short = None
     best_allow_short = False
     best_margin = 0.0
+    best_min_hold_days = 1
+    best_cooldown_days = 0
     best_metrics = {"sharpe_ratio": -999.0, "total_return_pct": -999.0, "active_observations": 0}
 
     for long_threshold in long_candidates:
         for score_margin in SCORE_MARGIN_CANDIDATES:
-            result = backtest_from_scores(validation, scores, long_threshold, score_margin=score_margin)
-            metrics = metrics_for(result)
-            if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-                continue
-            candidate_rank = (metrics["sharpe_ratio"], metrics["total_return_pct"], -metrics["trades"])
-            best_rank = (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"], -best_metrics.get("trades", 0))
-            if candidate_rank > best_rank:
-                best_long = long_threshold
-                best_short = None
-                best_allow_short = False
-                best_margin = score_margin
-                best_metrics = metrics
+            for turnover_rule in TURNOVER_RULE_CANDIDATES:
+                result = backtest_from_scores(validation, scores, long_threshold, score_margin=score_margin, **turnover_rule)
+                metrics = metrics_for(result)
+                if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                    continue
+                if threshold_rank(metrics) > threshold_rank(best_metrics):
+                    best_long = long_threshold
+                    best_short = None
+                    best_allow_short = False
+                    best_margin = score_margin
+                    best_min_hold_days = turnover_rule["min_hold_days"]
+                    best_cooldown_days = turnover_rule["cooldown_days"]
+                    best_metrics = metrics
 
     for long_threshold in long_candidates:
         for short_threshold in short_candidates:
             if short_threshold >= long_threshold:
                 continue
             for score_margin in SCORE_MARGIN_CANDIDATES:
-                result = backtest_from_scores(validation, scores, long_threshold, short_threshold, allow_short=True, score_margin=score_margin)
-                metrics = metrics_for(result)
-                if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-                    continue
-                candidate_rank = (metrics["sharpe_ratio"], metrics["total_return_pct"], -metrics["trades"])
-                best_rank = (best_metrics["sharpe_ratio"], best_metrics["total_return_pct"], -best_metrics.get("trades", 0))
-                if candidate_rank > best_rank:
-                    best_long = long_threshold
-                    best_short = short_threshold
-                    best_allow_short = True
-                    best_margin = score_margin
-                    best_metrics = metrics
+                for turnover_rule in TURNOVER_RULE_CANDIDATES:
+                    result = backtest_from_scores(validation, scores, long_threshold, short_threshold, allow_short=True, score_margin=score_margin, **turnover_rule)
+                    metrics = metrics_for(result)
+                    if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                        continue
+                    if threshold_rank(metrics) > threshold_rank(best_metrics):
+                        best_long = long_threshold
+                        best_short = short_threshold
+                        best_allow_short = True
+                        best_margin = score_margin
+                        best_min_hold_days = turnover_rule["min_hold_days"]
+                        best_cooldown_days = turnover_rule["cooldown_days"]
+                        best_metrics = metrics
 
     if best_metrics["sharpe_ratio"] == -999.0:
         best_long = float(np.nanquantile(high_volume_scores, 0.80))
         best_metrics = metrics_for(backtest_from_scores(validation, scores, best_long))
 
     best_metrics = {f"validation_{key}": value for key, value in best_metrics.items()}
-    return float(best_long), float(best_short) if best_short is not None else None, best_allow_short, float(best_margin), best_metrics
+    return (
+        float(best_long),
+        float(best_short) if best_short is not None else None,
+        best_allow_short,
+        float(best_margin),
+        int(best_min_hold_days),
+        int(best_cooldown_days),
+        best_metrics,
+    )
 
 
 def feature_importance(model, feature_cols: list[str], train_x: pd.DataFrame, train_y: pd.Series) -> list[dict]:
@@ -813,7 +882,7 @@ def run():
                         candidate.get("fallback_factory"),
                     )
                     validation_scores = predict_signal(validation_model, validation[feature_cols])
-                    long_threshold, short_threshold, allow_short, score_margin, validation_metrics = select_thresholds(validation, validation_scores)
+                    long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days, validation_metrics = select_thresholds(validation, validation_scores)
                     validation_metrics["validation_selection_score"] = round(float(validation_selection_score(validation_metrics)), 3)
                     trial = {
                         "candidate_name": candidate["candidate_name"],
@@ -823,6 +892,8 @@ def run():
                         "selected_threshold": round(float(long_threshold), 6),
                         "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
                         "selected_score_margin": round(float(score_margin), 6),
+                        "selected_min_hold_days": int(min_hold_days),
+                        "selected_cooldown_days": int(cooldown_days),
                         "strategy_side": "long_short" if allow_short else "long_only",
                         "hyperparameters": safe_json_params(candidate["params"]),
                         **validation_metrics,
@@ -836,6 +907,8 @@ def run():
                             "short_threshold": short_threshold,
                             "allow_short": allow_short,
                             "score_margin": score_margin,
+                            "min_hold_days": min_hold_days,
+                            "cooldown_days": cooldown_days,
                         }
                 except Exception as candidate_error:
                     candidate_trials.append({
@@ -854,6 +927,8 @@ def run():
             short_threshold = best_trial["short_threshold"]
             allow_short = bool(best_trial["allow_short"])
             score_margin = float(best_trial["score_margin"])
+            min_hold_days = int(best_trial["min_hold_days"])
+            cooldown_days = int(best_trial["cooldown_days"])
             validation_metrics = {
                 key: value
                 for key, value in best_trial.items()
@@ -868,7 +943,7 @@ def run():
                 selected_candidate.get("fallback_factory"),
             )
             scores = predict_signal(final_model, test[feature_cols])
-            result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short, score_margin)
+            result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days)
             metrics = metrics_for(result)
             importances = feature_importance(final_model, feature_cols, train_full_high_volume[feature_cols], train_full_high_volume["target_up"])
             split_metrics, correlations = split_analysis(name, result, test, feature_cols, importances)
@@ -906,6 +981,8 @@ def run():
                 "selected_threshold": round(float(long_threshold), 6),
                 "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
                 "selected_score_margin": round(float(score_margin), 6),
+                "selected_min_hold_days": int(min_hold_days),
+                "selected_cooldown_days": int(cooldown_days),
                 "strategy_side": "long_short" if allow_short else "long_only",
                 "selected_candidate": best_trial["candidate_name"],
                 "selected_candidate_index": int(best_trial["candidate_index"]),

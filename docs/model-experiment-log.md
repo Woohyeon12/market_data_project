@@ -207,3 +207,13 @@ This log records each small model experiment so weak runs are not repeated and s
 - Package candidate: false.
 - Read: The turnover-adjusted candidate score was recorded but did not change the selected candidates versus Experiment 004, so test performance was unchanged and still worse than Experiment 003. Ranking penalties alone are not enough when the same validation winner dominates.
 - Next hypothesis: Add an explicit turnover rule inside `backtest_from_scores`, such as minimum holding days and/or cooldown after exits, then let validation choose thresholds plus the turnover rule before the latest two-year test.
+
+## 2026-04-19 06:12 KST - Experiment 006 Setup
+
+- Hypothesis: Exp5 did not improve because ranking penalties did not alter the selected candidate or the realized trade path.
+- Change: Keep 10 candidates per model family and the turnover-adjusted candidate score.
+- Change: Add explicit turnover-rule candidates inside `backtest_from_scores`: minimum hold days from 1 to 3 and cooldown after exit from 0 to 2 days.
+- Change: Validation now selects threshold, score margin, strategy side, minimum hold, and cooldown together before the latest two-year test.
+- UI/API: Add `selected_min_hold_days` and `selected_cooldown_days` to make the chosen turnover rule visible in the Models detail panel.
+- Expected effect: Reduce churn directly, possibly lower transaction cost drag and improve split stability. If the trade path remains poor, the next experiment should target regime filtering rather than more candidate grids.
+- Full backtest status: Pending Kaggle Experiment 006 run.

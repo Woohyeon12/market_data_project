@@ -192,6 +192,8 @@ class KaggleModelResult(BaseModel):
     selected_threshold: float | None = None
     selected_short_threshold: float | None = None
     selected_score_margin: float | None = None
+    selected_min_hold_days: int | None = None
+    selected_cooldown_days: int | None = None
     strategy_side: str | None = None
     selected_candidate: str | None = None
     selected_candidate_index: int | None = None

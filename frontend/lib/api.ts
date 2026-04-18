@@ -215,6 +215,8 @@ export type KaggleModelResult = {
   selected_threshold?: number | null;
   selected_short_threshold?: number | null;
   selected_score_margin?: number | null;
+  selected_min_hold_days?: number | null;
+  selected_cooldown_days?: number | null;
   strategy_side?: string | null;
   selected_candidate?: string | null;
   selected_candidate_index?: number | null;
