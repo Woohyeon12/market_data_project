@@ -91,6 +91,8 @@ The folder `kaggle/volume_boosting_gpu` contains a Kaggle notebook script for hi
 - It selects long-only or long/short signal thresholds from a pre-test validation window and records whether the latest two-year Sharpe meets the research target.
 - It writes `run_summary.json`, split metrics, correlations, feature importance, and predictions.
 
+See `docs/model-regime-validation-plan.md` for the regime filter, walk-forward, and package-candidate gates that should be added before treating a model as sellable.
+
 Run from the repo root after authenticating Kaggle in the current shell:
 
 ```powershell

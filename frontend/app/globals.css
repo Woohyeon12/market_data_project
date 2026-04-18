@@ -868,7 +868,8 @@ h1 {
 .showcase-score,
 .showcase-metrics div,
 .showcase-detail-grid div,
-.split-return-strip div {
+.split-return-strip div,
+.model-readiness {
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -929,6 +930,57 @@ h1 {
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.model-readiness {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.42fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+}
+
+.model-readiness-ready {
+  border-color: rgba(14, 138, 115, 0.35);
+  background: #f3fbf8;
+}
+
+.model-readiness-watch {
+  border-color: rgba(174, 116, 24, 0.36);
+  background: #fff9ee;
+}
+
+.model-readiness-hold {
+  border-color: rgba(196, 74, 74, 0.35);
+  background: #fff6f5;
+}
+
+.model-readiness span,
+.model-readiness li,
+.readiness-pill {
+  overflow-wrap: anywhere;
+}
+
+.model-readiness span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.model-readiness strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 20px;
+}
+
+.model-readiness ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .showcase-equity-curve line {
@@ -1001,7 +1053,7 @@ h1 {
 
 .comparison-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1.3fr) repeat(5, minmax(58px, 0.7fr));
+  grid-template-columns: minmax(120px, 1.25fr) minmax(98px, 0.9fr) repeat(5, minmax(58px, 0.7fr));
   gap: 8px;
   align-items: center;
   padding: 9px 10px;
@@ -1021,6 +1073,32 @@ h1 {
   background: var(--ink-soft);
   font-size: 12px;
   font-weight: 700;
+}
+
+.readiness-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.readiness-pill-ready {
+  color: #076a59;
+  background: #e7f6f1;
+}
+
+.readiness-pill-watch {
+  color: #8a5a10;
+  background: #fff0d2;
+}
+
+.readiness-pill-hold {
+  color: #a33232;
+  background: #ffe3df;
 }
 
 .model-seller-note {
@@ -1665,6 +1743,10 @@ h1 {
   .showcase-detail-grid,
   .split-return-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .model-readiness {
+    grid-template-columns: 1fr;
   }
 
   .comparison-row {

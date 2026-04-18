@@ -553,6 +553,9 @@ type ShowcaseModel = {
   validationSharpeRatio?: number | null;
   sharpeTarget?: number | null;
   targetMet?: boolean | null;
+  readinessLabel: string;
+  readinessTone: "ready" | "watch" | "hold";
+  readinessReasons: string[];
   equityCurve: ModelEquityPoint[];
 };
 
@@ -594,12 +597,80 @@ function buildStabilityScore(model: {
   );
 }
 
+function buildModelReadiness(model: {
+  sharpeRatio: number;
+  sharpeTarget?: number | null;
+  targetMet?: boolean | null;
+  validationSharpeRatio?: number | null;
+  maxDrawdownPct: number;
+  splitReturns: number[];
+}) {
+  const target = model.sharpeTarget ?? 2;
+  const positiveSplitCount = model.splitReturns.filter((value) => value > 0).length;
+  const splitCount = Math.max(1, model.splitReturns.length);
+  const positiveSplitRatio = positiveSplitCount / splitCount;
+  const splitVolatility = standardDeviation(model.splitReturns);
+  const reasons: string[] = [];
+
+  if (model.targetMet === false || model.sharpeRatio < target) {
+    reasons.push(`Latest 2Y Sharpe ${model.sharpeRatio.toFixed(2)} is below ${target.toFixed(1)} target`);
+  }
+
+  if (
+    model.validationSharpeRatio !== null &&
+    model.validationSharpeRatio !== undefined &&
+    model.validationSharpeRatio >= target &&
+    model.sharpeRatio < target
+  ) {
+    reasons.push("Validation looked stronger than the recent backtest, so regime decay is likely");
+  }
+
+  if (positiveSplitRatio < 0.75) {
+    reasons.push(`Only ${positiveSplitCount}/${splitCount} splits are positive`);
+  }
+
+  if (splitVolatility > 18) {
+    reasons.push(`Split return dispersion is high at ${splitVolatility.toFixed(1)}%`);
+  }
+
+  if (model.maxDrawdownPct <= -20) {
+    reasons.push(`Drawdown reached ${model.maxDrawdownPct.toFixed(1)}%`);
+  }
+
+  if (reasons.length === 0) {
+    return {
+      label: "Package candidate",
+      tone: "ready" as const,
+      reasons: ["Meets the current Sharpe target and split stability gates"],
+    };
+  }
+
+  if (model.sharpeRatio >= 1 && positiveSplitRatio >= 0.5) {
+    return {
+      label: "Watchlist only",
+      tone: "watch" as const,
+      reasons,
+    };
+  }
+
+  return {
+    label: "Research hold",
+    tone: "hold" as const,
+    reasons,
+  };
+}
+
 function fromLocalModel(model: ModelBacktestResult): ShowcaseModel {
   const splitReturns = equitySplitReturns(model.equity_curve, model.total_return_pct);
   const returnSinceStartPct = sampledEquityReturn(model.equity_curve, model.total_return_pct);
   const stabilityScore = buildStabilityScore({
     sharpeRatio: model.sharpe_ratio,
     winRatePct: model.win_rate_pct,
+    maxDrawdownPct: model.max_drawdown_pct,
+    splitReturns,
+  });
+  const readiness = buildModelReadiness({
+    sharpeRatio: model.sharpe_ratio,
     maxDrawdownPct: model.max_drawdown_pct,
     splitReturns,
   });
@@ -629,6 +700,9 @@ function fromLocalModel(model: ModelBacktestResult): ShowcaseModel {
     splitReturnStd: standardDeviation(splitReturns),
     splitReturns,
     features: model.features,
+    readinessLabel: readiness.label,
+    readinessTone: readiness.tone,
+    readinessReasons: readiness.reasons,
     equityCurve: model.equity_curve,
   };
 }
@@ -641,6 +715,14 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
   const stabilityScore = buildStabilityScore({
     sharpeRatio: model.sharpe_ratio,
     winRatePct: model.win_rate_pct,
+    maxDrawdownPct: model.max_drawdown_pct,
+    splitReturns,
+  });
+  const readiness = buildModelReadiness({
+    sharpeRatio: model.sharpe_ratio,
+    sharpeTarget: model.sharpe_target,
+    targetMet: model.target_met,
+    validationSharpeRatio: model.validation_sharpe_ratio,
     maxDrawdownPct: model.max_drawdown_pct,
     splitReturns,
   });
@@ -678,6 +760,9 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     validationSharpeRatio: model.validation_sharpe_ratio,
     sharpeTarget: model.sharpe_target,
     targetMet: model.target_met,
+    readinessLabel: readiness.label,
+    readinessTone: readiness.tone,
+    readinessReasons: readiness.reasons,
     equityCurve: model.equity_curve,
   };
 }
@@ -1477,6 +1562,17 @@ export function ResearchDashboard() {
                     </div>
                   </div>
                 </div>
+                <div className={`model-readiness model-readiness-${selectedModel.readinessTone}`}>
+                  <div>
+                    <span>Model readiness</span>
+                    <strong>{selectedModel.readinessLabel}</strong>
+                  </div>
+                  <ul>
+                    {selectedModel.readinessReasons.slice(0, 3).map((reason) => (
+                      <li key={`${selectedModel.id}-${reason}`}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
                 <div className="showcase-detail-grid">
                   <div>
                     <span>Created</span>
@@ -1574,6 +1670,7 @@ export function ResearchDashboard() {
                 <div className="comparison-table" aria-label="Model comparison table">
                   <div className="comparison-row comparison-head">
                     <span>Model</span>
+                    <span>Readiness</span>
                     <span>Stability</span>
                     <span>Sharpe</span>
                     <span>Win</span>
@@ -1583,6 +1680,9 @@ export function ResearchDashboard() {
                   {comparisonModels.map((model) => (
                     <div className="comparison-row" key={`compare-${model.id}`}>
                       <span>{model.name}</span>
+                      <strong className={`readiness-pill readiness-pill-${model.readinessTone}`}>
+                        {model.readinessLabel}
+                      </strong>
                       <strong>{model.stabilityScore}</strong>
                       <strong>{model.sharpeRatio.toFixed(2)}</strong>
                       <strong>{model.winRatePct.toFixed(1)}%</strong>
