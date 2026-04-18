@@ -21,7 +21,7 @@ Use only information available before each prediction date.
 - Liquidity/risk regime: US 10Y and 5Y yield bp-change buckets, Nasdaq 20D trend, gold 20D trend.
 - Momentum regime: RSI bucket, Bollinger percent-b bucket, 7D/30D return bucket.
 - Cross-asset regime: VIX, DXY, oil, silver, gold/silver ratio, Nasdaq/S&P 500 relative momentum, and BTC rolling correlations to risk assets.
-- Feature selection regime: build a broad candidate pool, but train only on about 200 target-relevant features selected with a low pairwise-correlation gate.
+- Feature selection regime: build a broad candidate pool, then train on a dynamic number of target-relevant features selected with a low pairwise-correlation gate and a base-feature floor.
 
 ## Walk-Forward Rules
 
@@ -50,4 +50,5 @@ A model can be labeled `Package candidate` only when all checks pass:
 4. Done in script: add a rejection reason list into `run_summary.json`.
 5. Done in script: reduce the broad normalized and second-order feature pool to about 200 low-correlation selected features before fitting.
 6. Partly done in UI contract: surface package readiness, cost drag, gross Sharpe, worst split Sharpe, selected feature count, candidate pool size, and rejection reasons on the Models page after the next Kaggle run includes those fields.
-7. Current experiment: enforce a base-feature floor during low-correlation feature selection so second-order synthetic variables cannot dominate the final 200-feature set.
+7. Done in Experiment 001: enforce a base-feature floor during low-correlation feature selection so second-order synthetic variables cannot dominate the final feature set.
+8. Current experiment: make the feature count dynamic and draw base-floor candidates from the full normalized base-feature pool before filling remaining slots with interaction candidates.

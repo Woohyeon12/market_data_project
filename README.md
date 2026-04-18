@@ -87,7 +87,7 @@ The folder `kaggle/volume_boosting_gpu` contains a Kaggle notebook script for hi
 - It evaluates the latest two years in four chronological splits.
 - It compares only LightGBM, XGBoost, and ExtraTrees engineered models.
 - It normalizes first-order variables such as volume, trend flags, rolling values, RSI, candle size, 7/30-day lags, Bollinger Bands, cross-asset returns, volatility regimes, yield spreads, and golden-cross signals.
-- It creates arithmetic second-order features from selected normalized variables, re-normalizes those interaction features, then keeps about 200 target-relevant features with low pairwise correlation and a base-feature floor to reduce interaction overfit.
+- It creates arithmetic second-order features from selected normalized variables, re-normalizes those interaction features, then keeps a dynamic count of target-relevant features with low pairwise correlation and a full-pool base-feature floor to reduce interaction overfit.
 - It selects long-only or long/short signal thresholds from a pre-test validation window and records whether the latest two-year Sharpe meets the research target.
 - It calculates net performance after transaction cost and slippage assumptions, then records rejection reasons when package-candidate gates fail.
 - It writes `run_summary.json`, split metrics, correlations, feature importance, and predictions.

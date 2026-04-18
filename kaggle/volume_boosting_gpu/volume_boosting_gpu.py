@@ -30,10 +30,13 @@ TRAIN_END_OFFSET = 504
 VALIDATION_OFFSET = 252
 HIGH_VOLUME_QUANTILE = 0.70
 INTERACTION_FEATURE_LIMIT = 32
-FINAL_FEATURE_LIMIT = 200
-FEATURE_PREFILTER_LIMIT = 900
+MIN_SELECTED_FEATURES = 120
+SOFT_SELECTED_FEATURES = 240
+MAX_SELECTED_FEATURES = 360
+INTERACTION_PREFILTER_LIMIT = 900
 MAX_FEATURE_CORRELATION = 0.68
 MIN_SELECTED_BASE_FEATURES = 60
+MIN_DYNAMIC_TARGET_CORRELATION = 0.012
 SHARPE_TARGET = 2.0
 MIN_VALIDATION_TRADES = 18
 TRANSACTION_COST_BPS = 5.0
@@ -285,9 +288,18 @@ def build_second_order_features(normalized: pd.DataFrame, source_cols: list[str]
 def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, base_feature_count: int) -> tuple[list[str], dict]:
     target_scores = features.corrwith(target).abs().replace([np.inf, -np.inf], np.nan).fillna(0.0)
     ranked = target_scores.sort_values(ascending=False)
-    candidates = ranked.index[:min(FEATURE_PREFILTER_LIMIT, len(ranked))].tolist()
-    candidate_corr = features[candidates].corr().abs().replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    base_candidates = [column for column in candidates if column.startswith("z_")]
+    base_candidates = [column for column in ranked.index if column.startswith("z_")]
+    interaction_candidates = [column for column in ranked.index if column.startswith("z2_")][:INTERACTION_PREFILTER_LIMIT]
+    candidate_pool = list(dict.fromkeys(base_candidates + interaction_candidates))
+    ranked_pool = [column for column in ranked.index if column in set(candidate_pool)]
+    candidate_corr = features[candidate_pool].corr().abs().replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    pool_scores = target_scores[ranked_pool]
+    soft_rank_index = min(SOFT_SELECTED_FEATURES - 1, len(pool_scores) - 1) if len(pool_scores) else 0
+    dynamic_score_floor = (
+        max(MIN_DYNAMIC_TARGET_CORRELATION, float(pool_scores.iloc[soft_rank_index]) * 0.75)
+        if len(pool_scores)
+        else MIN_DYNAMIC_TARGET_CORRELATION
+    )
     selected: list[str] = []
     selected_set: set[str] = set()
 
@@ -295,7 +307,14 @@ def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, b
         return sum(1 for column in selected if column.startswith("z_"))
 
     def try_add(column: str, max_corr_allowed: float) -> None:
-        if column in selected_set or len(selected) >= FINAL_FEATURE_LIMIT:
+        if column in selected_set or len(selected) >= MAX_SELECTED_FEATURES:
+            return
+        score = float(target_scores.get(column, 0.0))
+        floor_is_active = (
+            len(selected) >= MIN_SELECTED_FEATURES
+            and not (column.startswith("z_") and selected_base_count() < MIN_SELECTED_BASE_FEATURES)
+        )
+        if floor_is_active and score < dynamic_score_floor:
             return
         if selected:
             max_corr = float(candidate_corr.loc[column, selected].max())
@@ -310,18 +329,18 @@ def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, b
                 break
             try_add(column, max_corr_allowed)
 
-        if len(selected) >= FINAL_FEATURE_LIMIT:
+        if len(selected) >= MAX_SELECTED_FEATURES:
             break
 
-        for column in candidates:
+        for column in ranked_pool:
             try_add(column, max_corr_allowed)
-            if len(selected) >= FINAL_FEATURE_LIMIT:
+            if len(selected) >= MAX_SELECTED_FEATURES:
                 break
 
-        if len(selected) >= FINAL_FEATURE_LIMIT:
+        if len(selected) >= MAX_SELECTED_FEATURES:
             break
 
-    selected = selected[:FINAL_FEATURE_LIMIT]
+    selected = selected[:MAX_SELECTED_FEATURES]
     selected_corr = features[selected].corr().abs() if len(selected) > 1 else pd.DataFrame()
     if len(selected) > 1:
         upper = selected_corr.where(np.triu(np.ones(selected_corr.shape), k=1).astype(bool))
@@ -330,15 +349,21 @@ def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, b
         max_pairwise_corr = 0.0
 
     summary = {
-        "method": "target-ranked greedy low-correlation selection with base-feature floor on pre-test training data",
+        "method": "dynamic target-ranked low-correlation selection with full-pool base-feature floor on pre-test training data",
         "candidate_feature_count": int(features.shape[1]),
-        "prefilter_feature_count": int(len(candidates)),
+        "candidate_pool_count": int(len(candidate_pool)),
+        "base_candidate_count": int(len(base_candidates)),
+        "interaction_prefilter_count": int(len(interaction_candidates)),
         "selected_feature_count": int(len(selected)),
         "base_feature_count": int(base_feature_count),
         "selected_base_feature_count": int(sum(1 for column in selected if column.startswith("z_"))),
         "selected_interaction_feature_count": int(sum(1 for column in selected if column.startswith("z2_"))),
+        "min_selected_features": int(MIN_SELECTED_FEATURES),
+        "soft_selected_features": int(SOFT_SELECTED_FEATURES),
+        "max_selected_features": int(MAX_SELECTED_FEATURES),
         "min_selected_base_features": int(MIN_SELECTED_BASE_FEATURES),
         "selected_base_floor_met": selected_base_count() >= min(MIN_SELECTED_BASE_FEATURES, len(base_candidates)),
+        "dynamic_target_score_floor": round(float(dynamic_score_floor), 5),
         "max_allowed_pairwise_correlation": MAX_FEATURE_CORRELATION,
         "observed_max_pairwise_correlation": round(max_pairwise_corr, 4),
         "mean_abs_target_correlation": round(float(target_scores[selected].mean()), 5) if selected else 0.0,

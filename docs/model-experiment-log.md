@@ -78,3 +78,13 @@ This log records each small model experiment so weak runs are not repeated and s
 - Package candidate: false.
 - Read: The result is only a tiny improvement over the prior -0.553 Sharpe and still clearly unsellable. The important finding is implementation-related: the base-feature floor missed because base candidates were still constrained by the top-900 prefilter, so only 30 base features were available to the floor pass.
 - Next hypothesis: Build the base-feature floor from the full normalized base-feature pool before applying the interaction prefilter, then rerun.
+
+## 2026-04-19 05:05 KST - Experiment 002 Setup
+
+- User directive: Feature count does not need to stay fixed at 200; it may change dynamically.
+- Hypothesis: A fixed 200-feature cap is too rigid. A dynamic selector can preserve enough base market structure while avoiding low-score interaction clutter.
+- Change: Replaced the fixed `FINAL_FEATURE_LIMIT = 200` cap with a dynamic range: minimum 120, soft target 240, maximum 360.
+- Change: Base candidates now come from the full normalized base-feature pool, while interaction candidates still use a target-ranked prefilter.
+- Change: After the minimum feature count is reached, additional features must clear a dynamic target-correlation floor unless they are still needed to satisfy the base-feature floor.
+- Expected effect: The selected feature count can shrink or expand based on actual signal quality; base features should no longer be capped at 30 by the interaction-heavy prefilter.
+- Full backtest status: Pending Kaggle Experiment 002 run.
