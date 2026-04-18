@@ -196,6 +196,7 @@ class KaggleModelResult(BaseModel):
     selected_candidate: str | None = None
     selected_candidate_index: int | None = None
     candidate_count: int | None = None
+    selected_validation_score: float | None = None
     selected_hyperparameters: dict = {}
     candidate_trials: list[dict] = []
     validation_sharpe_ratio: float | None = None

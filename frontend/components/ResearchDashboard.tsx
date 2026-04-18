@@ -562,6 +562,7 @@ type ShowcaseModel = {
   selectedCandidate?: string | null;
   selectedCandidateIndex?: number | null;
   candidateCount?: number | null;
+  selectedValidationScore?: number | null;
   validationSharpeRatio?: number | null;
   sharpeTarget?: number | null;
   targetMet?: boolean | null;
@@ -815,6 +816,7 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     selectedCandidate: model.selected_candidate,
     selectedCandidateIndex: model.selected_candidate_index,
     candidateCount: model.candidate_count,
+    selectedValidationScore: model.selected_validation_score,
     validationSharpeRatio: model.validation_sharpe_ratio,
     sharpeTarget: model.sharpe_target,
     targetMet: model.target_met,
@@ -1748,6 +1750,14 @@ export function ResearchDashboard() {
                         : selectedModel.candidateCount
                           ? `best of ${selectedModel.candidateCount}`
                           : "single"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Validation score</span>
+                    <strong>
+                      {selectedModel.selectedValidationScore !== null && selectedModel.selectedValidationScore !== undefined
+                        ? selectedModel.selectedValidationScore.toFixed(3)
+                        : "n/a"}
                     </strong>
                   </div>
                 </div>

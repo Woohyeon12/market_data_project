@@ -219,6 +219,7 @@ export type KaggleModelResult = {
   selected_candidate?: string | null;
   selected_candidate_index?: number | null;
   candidate_count?: number | null;
+  selected_validation_score?: number | null;
   selected_hyperparameters?: Record<string, number | string | boolean | null>;
   candidate_trials?: Record<string, number | string | boolean | null | Record<string, number | string | boolean | null>>[];
   validation_sharpe_ratio?: number | null;

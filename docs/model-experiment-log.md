@@ -177,3 +177,13 @@ This log records each small model experiment so weak runs are not repeated and s
 - Package candidate: false.
 - Read: The 10-candidate search ran correctly but worsened versus Experiment 003, where the best net Sharpe was -0.111. More hyperparameter candidates did not fix turnover or the late-window drawdown cluster. The validation-selected candidate reduced max drawdown versus Exp3 but lost gross edge and had zero positive test splits.
 - Next hypothesis: Keep the 10-candidate infrastructure, but change the validation ranking from mostly Sharpe-first to a turnover-adjusted validation score that penalizes transaction cost and trades before the final test. Do not choose by the test result.
+
+## 2026-04-19 06:00 KST - Experiment 005 Setup
+
+- Hypothesis: Experiment 004 selected by validation performance but only used transaction cost and trades as late tie-breakers, so over-trading candidates could still win.
+- Change: Keep 10 candidates per model family.
+- Change: Add a turnover-adjusted validation score before final testing: validation Sharpe plus weighted validation return and drawdown, minus transaction-cost and trade-count penalties.
+- Change: Candidate ranking now starts with this validation selection score, then falls back to validation Sharpe, return, drawdown, cost, and trades.
+- UI/API: Add `selected_validation_score` so the chosen candidate is auditable in the Models detail panel.
+- Expected effect: Prefer candidates that retain edge with fewer cost-heavy entries. If performance still worsens, the next step should be an explicit minimum-hold or cooldown rule rather than more hyperparameter search.
+- Full backtest status: Pending Kaggle Experiment 005 run.

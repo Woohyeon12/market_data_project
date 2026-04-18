@@ -44,6 +44,10 @@ SLIPPAGE_BPS = 5.0
 MIN_PACKAGE_ACTIVE_OBSERVATIONS = 40
 SCORE_MARGIN_CANDIDATES = [0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1]
 CANDIDATES_PER_MODEL = 10
+VALIDATION_RETURN_WEIGHT = 0.015
+VALIDATION_DRAWDOWN_WEIGHT = 0.015
+VALIDATION_COST_PENALTY = 0.08
+VALIDATION_TRADE_PENALTY = 0.012
 EPSILON = 1e-6
 
 
@@ -712,8 +716,24 @@ def fit_model(factory, x: pd.DataFrame, y: pd.Series, model_type: str, fallback_
         return model, f"{model_type}_cpu_fallback"
 
 
-def validation_rank(validation_metrics: dict) -> tuple[float, float, float, float, int]:
+def validation_selection_score(validation_metrics: dict) -> float:
+    sharpe = float(validation_metrics.get("validation_sharpe_ratio", -999.0))
+    total_return = float(validation_metrics.get("validation_total_return_pct", -999.0))
+    max_drawdown = float(validation_metrics.get("validation_max_drawdown_pct", -999.0))
+    cost = float(validation_metrics.get("validation_total_transaction_cost_pct", 999.0))
+    trades = float(validation_metrics.get("validation_trades", 999.0))
     return (
+        sharpe
+        + total_return * VALIDATION_RETURN_WEIGHT
+        + max_drawdown * VALIDATION_DRAWDOWN_WEIGHT
+        - cost * VALIDATION_COST_PENALTY
+        - trades * VALIDATION_TRADE_PENALTY
+    )
+
+
+def validation_rank(validation_metrics: dict) -> tuple[float, float, float, float, float, int]:
+    return (
+        float(validation_metrics.get("validation_selection_score", validation_selection_score(validation_metrics))),
         float(validation_metrics.get("validation_sharpe_ratio", -999.0)),
         float(validation_metrics.get("validation_total_return_pct", -999.0)),
         float(validation_metrics.get("validation_max_drawdown_pct", -999.0)),
@@ -794,6 +814,7 @@ def run():
                     )
                     validation_scores = predict_signal(validation_model, validation[feature_cols])
                     long_threshold, short_threshold, allow_short, score_margin, validation_metrics = select_thresholds(validation, validation_scores)
+                    validation_metrics["validation_selection_score"] = round(float(validation_selection_score(validation_metrics)), 3)
                     trial = {
                         "candidate_name": candidate["candidate_name"],
                         "candidate_index": candidate["candidate_index"],
@@ -859,7 +880,7 @@ def run():
                 "status": "ok",
                 "message": (
                     f"Engineered features with normalized first-order inputs and re-normalized second-order interactions. "
-                    f"Best of {len(candidates)} validation candidates selected before the latest two-year test; "
+                    f"Best of {len(candidates)} candidates selected by turnover-adjusted validation score before the latest two-year test; "
                     f"Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
                 ),
                 "backtest_start": str(test["date"].iloc[0]),
@@ -889,6 +910,7 @@ def run():
                 "selected_candidate": best_trial["candidate_name"],
                 "selected_candidate_index": int(best_trial["candidate_index"]),
                 "candidate_count": len(candidates),
+                "selected_validation_score": best_trial.get("validation_selection_score"),
                 "selected_hyperparameters": safe_json_params(selected_candidate["params"]),
                 "candidate_trials": sorted(candidate_trials, key=validation_rank, reverse=True),
                 "sharpe_target": SHARPE_TARGET,
