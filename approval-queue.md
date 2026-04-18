@@ -18,6 +18,7 @@
 - Done: 2026-04-18 23:05 KST Kaggle authentication was restored, kernel version 5 completed, and the fresh roughly 200-feature low-correlation result was downloaded. The dashboard API now reports 200 selected features from 2,146 candidates; best model was `extra_trees_engineered` with Sharpe -0.553, so it is not a package candidate.
 - Done: 2026-04-19 04:35 KST permission refresh cleared the local blockers. Git staging succeeded, Kaggle status check authenticated through `scripts/kaggle.cmd`, `npm.cmd run build` passed, and Python compile checks passed.
 - Done: 2026-04-19 04:42 KST Kaggle version 6 completed and outputs were downloaded. Experiment 001 slightly improved best Sharpe from -0.553 to -0.536, but the base-feature floor missed with only 30 base features and 170 interaction features, so it is still not a package candidate.
+- Done: 2026-04-19 05:51 KST Kaggle version 7 completed and outputs were downloaded. Experiment 002 used dynamic feature count, selected 360 features, met the base floor with 62 base features, and improved the best model to `xgb_gpu_engineered` with net Sharpe -0.132. It is still not a package candidate.
 
 ### Pending Approvals
 

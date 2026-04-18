@@ -88,3 +88,26 @@ This log records each small model experiment so weak runs are not repeated and s
 - Change: After the minimum feature count is reached, additional features must clear a dynamic target-correlation floor unless they are still needed to satisfy the base-feature floor.
 - Expected effect: The selected feature count can shrink or expand based on actual signal quality; base features should no longer be capped at 30 by the interaction-heavy prefilter.
 - Full backtest status: Pending Kaggle Experiment 002 run.
+
+## 2026-04-19 05:51 KST - Experiment 002 Result
+
+- Kaggle version: 7.
+- Candidate pool: 2,146 features.
+- Candidate selection pool: 1,062 features.
+- Selected features: 360.
+- Selected base features: 62.
+- Selected interaction features: 298.
+- Base floor met: true.
+- Dynamic target score floor: 0.0433.
+- Best model: `xgb_gpu_engineered`.
+- Net Sharpe: -0.132.
+- Gross Sharpe: 0.115.
+- Net total return: -8.314%.
+- Gross total return: 0.735%.
+- Win rate: 46.38%.
+- Max drawdown: -25.604%.
+- Positive splits: 3/4.
+- Active observations: 69.
+- Package candidate: false.
+- Read: Dynamic count and full-pool base selection fixed the feature-selection implementation issue and materially improved the top model from -0.536 to -0.132 Sharpe. The model is still not sellable because costs turn a slightly positive gross edge into a negative net result, and split 4 remains a loss cluster.
+- Next hypothesis: Keep dynamic features, but change the threshold/regime layer to trade fewer low-margin candles and avoid late-period drawdown regimes. Candidate changes: validation-selected probability margin, stricter no-trade band, or a simple trend/drawdown regime gate.
