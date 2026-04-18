@@ -122,3 +122,26 @@ This log records each small model experiment so weak runs are not repeated and s
 - UI/API: Add `selected_score_margin` to the backend schema and Models detail view.
 - Expected effect: Fewer low-margin entries, lower transaction cost drag, and less late-window damage if split 4 was driven by marginal signals.
 - Full backtest status: Pending Kaggle Experiment 003 run.
+
+## 2026-04-19 06:03 UTC - Experiment 003 Result
+
+- Kaggle version: 8.
+- Selected features: 360.
+- Selected base features: 62.
+- Selected interaction features: 298.
+- Best model: `xgb_gpu_engineered`.
+- Selected score margin: 0.075.
+- Net Sharpe: -0.111.
+- Gross Sharpe: 0.145.
+- Net total return: -7.211%.
+- Gross total return: 1.949%.
+- Win rate: 47.69%.
+- Max drawdown: -25.604%.
+- Active observations: 65.
+- Trades: 94.
+- Total transaction cost: 9.400%.
+- Positive splits: 1/4.
+- Package candidate: false.
+- Read: Score margin improved the top model from -0.132 to -0.111 Sharpe and raised gross return, but it did not reduce turnover because the selected base threshold shifted lower while the margin shifted the effective threshold back near the prior cutoff. Split 3 improved, but split consistency worsened to 1/4 positive.
+- Next hypothesis: Add a direct turnover control instead of only margin. Candidate changes: minimum holding period, cooldown after position exit, or validation-ranking penalty for transaction cost/trade count.
+- Local deployment check: `docker compose up -d --build backend frontend` completed successfully, and `/research/model-backtests` returns Experiment 003 with `selected_score_margin` 0.075 for `xgb_gpu_engineered`.

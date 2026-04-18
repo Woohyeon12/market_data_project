@@ -19,6 +19,8 @@
 - Done: 2026-04-19 04:35 KST permission refresh cleared the local blockers. Git staging succeeded, Kaggle status check authenticated through `scripts/kaggle.cmd`, `npm.cmd run build` passed, and Python compile checks passed.
 - Done: 2026-04-19 04:42 KST Kaggle version 6 completed and outputs were downloaded. Experiment 001 slightly improved best Sharpe from -0.553 to -0.536, but the base-feature floor missed with only 30 base features and 170 interaction features, so it is still not a package candidate.
 - Done: 2026-04-19 05:51 KST Kaggle version 7 completed and outputs were downloaded. Experiment 002 used dynamic feature count, selected 360 features, met the base floor with 62 base features, and improved the best model to `xgb_gpu_engineered` with net Sharpe -0.132. It is still not a package candidate.
+- Done: 2026-04-19 06:03 UTC Kaggle version 8 completed and outputs were downloaded. Experiment 003 selected a 0.075 score margin and slightly improved best net Sharpe to -0.111, but trades and transaction cost did not fall, and positive splits fell to 1/4. It is still not a package candidate.
+- Done: 2026-04-19 05:20 KST backend and frontend Docker services were rebuilt and restarted. The `/research/model-backtests` API now exposes the imported Experiment 003 Kaggle run with `selected_score_margin`.
 
 ### Pending Approvals
 
@@ -36,14 +38,11 @@
 - Done: Added `.dockerignore` files so Docker builds do not send local `node_modules`, `.next`, data, or venv folders.
 - Done: Git commit and push completed through `b14a9b4`.
 - Done: Backend Docker rebuild/restart completed after adding Yahoo fundamentals-timeseries; fundamentals now avoid curated fallback for the tracked equities.
-- Still blocked/slow: `docker compose build` and `docker compose build frontend` repeatedly timed out without useful build logs even after the context cleanup.
+- Resolved later: Docker build validation completed successfully on 2026-04-19 05:20 KST with `docker compose up -d --build backend frontend`.
 
 ### Pending Approvals
 
-1. Docker-based validation after Docker Desktop settles or restarts
-   - Why: Docker services are running, but image rebuild commands repeatedly timed out after the local code/build checks passed.
-   - Command: `docker compose build frontend && docker compose up -d frontend`
-   - Expected result: Rebuild and serve the updated dashboard at `http://localhost:3000`.
+- None. Historical Docker validation blocker is resolved.
 
 ### Current Uncommitted Product Changes
 
