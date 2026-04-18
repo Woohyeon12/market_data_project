@@ -216,6 +216,11 @@ export type KaggleModelResult = {
   selected_short_threshold?: number | null;
   selected_score_margin?: number | null;
   strategy_side?: string | null;
+  selected_candidate?: string | null;
+  selected_candidate_index?: number | null;
+  candidate_count?: number | null;
+  selected_hyperparameters?: Record<string, number | string | boolean | null>;
+  candidate_trials?: Record<string, number | string | boolean | null | Record<string, number | string | boolean | null>>[];
   validation_sharpe_ratio?: number | null;
   sharpe_target?: number | null;
   target_met?: boolean | null;
@@ -243,6 +248,7 @@ export type KaggleModelRun = {
   backtest_window: string;
   batch_size: number;
   models_requested: number;
+  candidate_count_total?: number | null;
   sharpe_target?: number | null;
   transaction_cost_bps?: number | null;
   slippage_bps?: number | null;

@@ -193,6 +193,11 @@ class KaggleModelResult(BaseModel):
     selected_short_threshold: float | None = None
     selected_score_margin: float | None = None
     strategy_side: str | None = None
+    selected_candidate: str | None = None
+    selected_candidate_index: int | None = None
+    candidate_count: int | None = None
+    selected_hyperparameters: dict = {}
+    candidate_trials: list[dict] = []
     validation_sharpe_ratio: float | None = None
     sharpe_target: float | None = None
     target_met: bool | None = None
@@ -220,6 +225,7 @@ class KaggleModelRun(BaseModel):
     backtest_window: str
     batch_size: int
     models_requested: int
+    candidate_count_total: int | None = None
     sharpe_target: float | None = None
     transaction_cost_bps: float | None = None
     slippage_bps: float | None = None

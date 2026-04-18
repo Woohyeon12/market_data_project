@@ -145,3 +145,14 @@ This log records each small model experiment so weak runs are not repeated and s
 - Read: Score margin improved the top model from -0.132 to -0.111 Sharpe and raised gross return, but it did not reduce turnover because the selected base threshold shifted lower while the margin shifted the effective threshold back near the prior cutoff. Split 3 improved, but split consistency worsened to 1/4 positive.
 - Next hypothesis: Add a direct turnover control instead of only margin. Candidate changes: minimum holding period, cooldown after position exit, or validation-ranking penalty for transaction cost/trade count.
 - Local deployment check: `docker compose up -d --build backend frontend` completed successfully, and `/research/model-backtests` returns Experiment 003 with `selected_score_margin` 0.075 for `xgb_gpu_engineered`.
+
+## 2026-04-19 05:40 KST - Experiment 004 Setup
+
+- User directive: For each model family, create 10 model candidates and keep the best-performing one. Repeat the process until performance improves.
+- Guardrail: Candidate selection must be made on the pre-test validation window, not by picking the best latest-two-year test result after the fact.
+- Change: LightGBM, XGBoost, and ExtraTrees now each generate 10 deterministic hyperparameter candidates.
+- Change: Each candidate trains on the older-than-two-year fit window, selects threshold and score margin on validation, and is ranked by validation Sharpe, validation return, drawdown, lower cost, and fewer trades.
+- Change: Only the best validation candidate in each model family is retrained on fit plus validation and then scored on the latest two-year backtest.
+- UI/API: Model results now expose `candidate_count`, `selected_candidate`, `selected_candidate_index`, `selected_hyperparameters`, and `candidate_trials`; the Models detail panel shows the selected candidate as best-of-10.
+- Expected effect: Better hyperparameter coverage without selecting directly on the test window. If it improves validation but not test, the log should treat that as instability rather than a sellable result.
+- Full backtest status: Pending Kaggle Experiment 004 run.

@@ -43,6 +43,7 @@ TRANSACTION_COST_BPS = 5.0
 SLIPPAGE_BPS = 5.0
 MIN_PACKAGE_ACTIVE_OBSERVATIONS = 40
 SCORE_MARGIN_CANDIDATES = [0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1]
+CANDIDATES_PER_MODEL = 10
 EPSILON = 1e-6
 
 
@@ -404,68 +405,100 @@ def build_model_matrices(
     return features, selected_features, interaction_sources, feature_selection
 
 
+def _make_factory(model_class, params: dict):
+    clean_params = dict(params)
+    return lambda clean_params=clean_params: model_class(**clean_params)
+
+
+def _model_group(name: str, model_type: str, model_class, configs: list[dict], cpu_cleaner=None) -> dict:
+    candidates = []
+    for index, params in enumerate(configs[:CANDIDATES_PER_MODEL], start=1):
+        fallback_params = cpu_cleaner(params) if cpu_cleaner else None
+        candidates.append({
+            "candidate_name": f"{name}_c{index:02d}",
+            "candidate_index": index,
+            "params": dict(params),
+            "factory": _make_factory(model_class, params),
+            "fallback_factory": _make_factory(model_class, fallback_params) if fallback_params else None,
+        })
+    return {"name": name, "model_type": model_type, "candidates": candidates}
+
+
+def _lgbm_cpu_params(params: dict) -> dict:
+    cpu_params = dict(params)
+    cpu_params.pop("device", None)
+    return cpu_params
+
+
+def _xgb_cpu_params(params: dict) -> dict:
+    cpu_params = dict(params)
+    cpu_params.pop("device", None)
+    cpu_params["tree_method"] = "hist"
+    return cpu_params
+
+
 def model_specs():
-    specs = []
+    groups = []
 
     try:
         from lightgbm import LGBMClassifier
-        specs.append((
-            "lgbm_gpu_engineered",
-            "lightgbm_gpu_classifier",
-            lambda: LGBMClassifier(
-                n_estimators=520,
-                max_depth=4,
-                num_leaves=18,
-                learning_rate=0.025,
-                subsample=0.82,
-                colsample_bytree=0.62,
-                reg_alpha=0.12,
-                reg_lambda=0.45,
-                objective="binary",
-                device="gpu",
-                random_state=41,
-            ),
-        ))
+        lgbm_configs = [
+            {"n_estimators": 360, "max_depth": 3, "num_leaves": 10, "learning_rate": 0.035, "subsample": 0.72, "colsample_bytree": 0.50, "reg_alpha": 0.25, "reg_lambda": 0.90, "min_child_samples": 22, "objective": "binary", "device": "gpu", "random_state": 4101},
+            {"n_estimators": 420, "max_depth": 3, "num_leaves": 12, "learning_rate": 0.030, "subsample": 0.78, "colsample_bytree": 0.56, "reg_alpha": 0.18, "reg_lambda": 0.70, "min_child_samples": 18, "objective": "binary", "device": "gpu", "random_state": 4102},
+            {"n_estimators": 480, "max_depth": 4, "num_leaves": 16, "learning_rate": 0.026, "subsample": 0.82, "colsample_bytree": 0.62, "reg_alpha": 0.12, "reg_lambda": 0.55, "min_child_samples": 16, "objective": "binary", "device": "gpu", "random_state": 4103},
+            {"n_estimators": 520, "max_depth": 4, "num_leaves": 18, "learning_rate": 0.024, "subsample": 0.86, "colsample_bytree": 0.66, "reg_alpha": 0.08, "reg_lambda": 0.45, "min_child_samples": 14, "objective": "binary", "device": "gpu", "random_state": 4104},
+            {"n_estimators": 580, "max_depth": 4, "num_leaves": 22, "learning_rate": 0.021, "subsample": 0.76, "colsample_bytree": 0.70, "reg_alpha": 0.15, "reg_lambda": 0.80, "min_child_samples": 20, "objective": "binary", "device": "gpu", "random_state": 4105},
+            {"n_estimators": 640, "max_depth": 5, "num_leaves": 24, "learning_rate": 0.019, "subsample": 0.84, "colsample_bytree": 0.58, "reg_alpha": 0.10, "reg_lambda": 0.60, "min_child_samples": 18, "objective": "binary", "device": "gpu", "random_state": 4106},
+            {"n_estimators": 700, "max_depth": 5, "num_leaves": 28, "learning_rate": 0.017, "subsample": 0.88, "colsample_bytree": 0.74, "reg_alpha": 0.06, "reg_lambda": 0.40, "min_child_samples": 12, "objective": "binary", "device": "gpu", "random_state": 4107},
+            {"n_estimators": 460, "max_depth": 2, "num_leaves": 8, "learning_rate": 0.040, "subsample": 0.68, "colsample_bytree": 0.44, "reg_alpha": 0.35, "reg_lambda": 1.10, "min_child_samples": 28, "objective": "binary", "device": "gpu", "random_state": 4108},
+            {"n_estimators": 760, "max_depth": 3, "num_leaves": 14, "learning_rate": 0.015, "subsample": 0.80, "colsample_bytree": 0.52, "reg_alpha": 0.22, "reg_lambda": 0.95, "min_child_samples": 24, "objective": "binary", "device": "gpu", "random_state": 4109},
+            {"n_estimators": 600, "max_depth": 4, "num_leaves": 20, "learning_rate": 0.022, "subsample": 0.92, "colsample_bytree": 0.60, "reg_alpha": 0.04, "reg_lambda": 0.35, "min_child_samples": 10, "objective": "binary", "device": "gpu", "random_state": 4110},
+        ]
+        groups.append(_model_group("lgbm_gpu_engineered", "lightgbm_gpu_classifier", LGBMClassifier, lgbm_configs, _lgbm_cpu_params))
     except Exception as error:
-        specs.append(("lgbm_gpu_engineered", "lightgbm_import_error", lambda: (_ for _ in ()).throw(error)))
+        groups.append({
+            "name": "lgbm_gpu_engineered",
+            "model_type": "lightgbm_import_error",
+            "candidates": [{"candidate_name": "lgbm_gpu_engineered_c01", "candidate_index": 1, "params": {}, "factory": lambda error=error: (_ for _ in ()).throw(error), "fallback_factory": None}],
+        })
 
     try:
         from xgboost import XGBClassifier
-        specs.append((
-            "xgb_gpu_engineered",
-            "xgboost_gpu_classifier",
-            lambda: XGBClassifier(
-                n_estimators=520,
-                max_depth=3,
-                learning_rate=0.024,
-                subsample=0.82,
-                colsample_bytree=0.62,
-                reg_alpha=0.12,
-                reg_lambda=0.55,
-                objective="binary:logistic",
-                eval_metric="logloss",
-                tree_method="hist",
-                device="cuda",
-                random_state=37,
-            ),
-        ))
+        xgb_configs = [
+            {"n_estimators": 360, "max_depth": 2, "learning_rate": 0.040, "subsample": 0.72, "colsample_bytree": 0.50, "reg_alpha": 0.35, "reg_lambda": 1.10, "min_child_weight": 5.0, "gamma": 0.20, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3701},
+            {"n_estimators": 420, "max_depth": 2, "learning_rate": 0.034, "subsample": 0.78, "colsample_bytree": 0.56, "reg_alpha": 0.25, "reg_lambda": 0.90, "min_child_weight": 4.0, "gamma": 0.12, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3702},
+            {"n_estimators": 480, "max_depth": 3, "learning_rate": 0.028, "subsample": 0.82, "colsample_bytree": 0.62, "reg_alpha": 0.15, "reg_lambda": 0.65, "min_child_weight": 3.0, "gamma": 0.06, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3703},
+            {"n_estimators": 520, "max_depth": 3, "learning_rate": 0.024, "subsample": 0.86, "colsample_bytree": 0.66, "reg_alpha": 0.12, "reg_lambda": 0.55, "min_child_weight": 2.5, "gamma": 0.04, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3704},
+            {"n_estimators": 580, "max_depth": 3, "learning_rate": 0.021, "subsample": 0.76, "colsample_bytree": 0.70, "reg_alpha": 0.18, "reg_lambda": 0.80, "min_child_weight": 3.5, "gamma": 0.10, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3705},
+            {"n_estimators": 640, "max_depth": 4, "learning_rate": 0.018, "subsample": 0.84, "colsample_bytree": 0.58, "reg_alpha": 0.10, "reg_lambda": 0.60, "min_child_weight": 2.0, "gamma": 0.03, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3706},
+            {"n_estimators": 700, "max_depth": 4, "learning_rate": 0.016, "subsample": 0.88, "colsample_bytree": 0.74, "reg_alpha": 0.08, "reg_lambda": 0.45, "min_child_weight": 1.5, "gamma": 0.02, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3707},
+            {"n_estimators": 460, "max_depth": 2, "learning_rate": 0.032, "subsample": 0.68, "colsample_bytree": 0.44, "reg_alpha": 0.45, "reg_lambda": 1.30, "min_child_weight": 6.0, "gamma": 0.25, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3708},
+            {"n_estimators": 760, "max_depth": 3, "learning_rate": 0.014, "subsample": 0.80, "colsample_bytree": 0.52, "reg_alpha": 0.30, "reg_lambda": 1.00, "min_child_weight": 4.5, "gamma": 0.15, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3709},
+            {"n_estimators": 600, "max_depth": 4, "learning_rate": 0.020, "subsample": 0.92, "colsample_bytree": 0.60, "reg_alpha": 0.05, "reg_lambda": 0.35, "min_child_weight": 1.2, "gamma": 0.01, "objective": "binary:logistic", "eval_metric": "logloss", "tree_method": "hist", "device": "cuda", "random_state": 3710},
+        ]
+        groups.append(_model_group("xgb_gpu_engineered", "xgboost_gpu_classifier", XGBClassifier, xgb_configs, _xgb_cpu_params))
     except Exception as error:
-        specs.append(("xgb_gpu_engineered", "xgboost_import_error", lambda: (_ for _ in ()).throw(error)))
+        groups.append({
+            "name": "xgb_gpu_engineered",
+            "model_type": "xgboost_import_error",
+            "candidates": [{"candidate_name": "xgb_gpu_engineered_c01", "candidate_index": 1, "params": {}, "factory": lambda error=error: (_ for _ in ()).throw(error), "fallback_factory": None}],
+        })
 
     from sklearn.ensemble import ExtraTreesClassifier
-    specs.append((
-        "extra_trees_engineered",
-        "extra_trees_classifier",
-        lambda: ExtraTreesClassifier(
-            n_estimators=520,
-            max_depth=7,
-            min_samples_leaf=8,
-            max_features=0.45,
-            random_state=19,
-            n_jobs=-1,
-        ),
-    ))
-    return specs
+    extra_configs = [
+        {"n_estimators": 420, "max_depth": 5, "min_samples_leaf": 12, "min_samples_split": 24, "max_features": 0.32, "bootstrap": False, "random_state": 1901, "n_jobs": -1},
+        {"n_estimators": 480, "max_depth": 6, "min_samples_leaf": 10, "min_samples_split": 20, "max_features": 0.38, "bootstrap": False, "random_state": 1902, "n_jobs": -1},
+        {"n_estimators": 520, "max_depth": 7, "min_samples_leaf": 8, "min_samples_split": 16, "max_features": 0.45, "bootstrap": False, "random_state": 1903, "n_jobs": -1},
+        {"n_estimators": 580, "max_depth": 8, "min_samples_leaf": 6, "min_samples_split": 14, "max_features": 0.52, "bootstrap": False, "random_state": 1904, "n_jobs": -1},
+        {"n_estimators": 640, "max_depth": 9, "min_samples_leaf": 5, "min_samples_split": 12, "max_features": 0.60, "bootstrap": False, "random_state": 1905, "n_jobs": -1},
+        {"n_estimators": 700, "max_depth": 10, "min_samples_leaf": 4, "min_samples_split": 10, "max_features": 0.68, "bootstrap": False, "random_state": 1906, "n_jobs": -1},
+        {"n_estimators": 760, "max_depth": 7, "min_samples_leaf": 7, "min_samples_split": 18, "max_features": 0.42, "bootstrap": True, "random_state": 1907, "n_jobs": -1},
+        {"n_estimators": 540, "max_depth": 4, "min_samples_leaf": 16, "min_samples_split": 32, "max_features": 0.28, "bootstrap": True, "random_state": 1908, "n_jobs": -1},
+        {"n_estimators": 820, "max_depth": 6, "min_samples_leaf": 9, "min_samples_split": 18, "max_features": 0.50, "bootstrap": True, "random_state": 1909, "n_jobs": -1},
+        {"n_estimators": 620, "max_depth": None, "min_samples_leaf": 12, "min_samples_split": 28, "max_features": 0.36, "bootstrap": True, "random_state": 1910, "n_jobs": -1},
+    ]
+    groups.append(_model_group("extra_trees_engineered", "extra_trees_classifier", ExtraTreesClassifier, extra_configs))
+    return groups
 
 
 def predict_signal(model, x: pd.DataFrame) -> np.ndarray:
@@ -665,23 +698,38 @@ def split_analysis(model_name: str, result: pd.DataFrame, test: pd.DataFrame, fe
     return split_metrics, correlations
 
 
-def fit_model(factory, x: pd.DataFrame, y: pd.Series, model_type: str):
-    model = factory()
+def fit_model(factory, x: pd.DataFrame, y: pd.Series, model_type: str, fallback_factory=None):
     try:
+        model = factory()
         model.fit(x, y)
         return model, model_type
     except Exception as gpu_error:
         print(f"{model_type} fit failed, retrying CPU-compatible fallback: {gpu_error}")
-        if "lightgbm" in model_type:
-            from lightgbm import LGBMClassifier
-            model = LGBMClassifier(n_estimators=420, max_depth=4, num_leaves=18, learning_rate=0.026, objective="binary", random_state=141)
-        elif "xgboost" in model_type:
-            from xgboost import XGBClassifier
-            model = XGBClassifier(n_estimators=420, max_depth=3, learning_rate=0.026, objective="binary:logistic", eval_metric="logloss", tree_method="hist", random_state=137)
-        else:
+        if fallback_factory is None:
             raise
+        model = fallback_factory()
         model.fit(x, y)
         return model, f"{model_type}_cpu_fallback"
+
+
+def validation_rank(validation_metrics: dict) -> tuple[float, float, float, float, int]:
+    return (
+        float(validation_metrics.get("validation_sharpe_ratio", -999.0)),
+        float(validation_metrics.get("validation_total_return_pct", -999.0)),
+        float(validation_metrics.get("validation_max_drawdown_pct", -999.0)),
+        -float(validation_metrics.get("validation_total_transaction_cost_pct", 999.0)),
+        -int(validation_metrics.get("validation_trades", 999999)),
+    )
+
+
+def safe_json_params(params: dict) -> dict:
+    clean = {}
+    for key, value in params.items():
+        if isinstance(value, (np.integer, np.floating)):
+            clean[key] = value.item()
+        else:
+            clean[key] = value
+    return clean
 
 
 def run():
@@ -707,7 +755,7 @@ def run():
 
     fit_high_volume = fit_frame[fit_frame["high_volume_candle"]].copy()
     train_full_high_volume = train_full[train_full["high_volume_candle"]].copy()
-    specs = model_specs()
+    model_groups = model_specs()
     model_rows = []
     split_rows = []
     corr_rows = []
@@ -720,26 +768,83 @@ def run():
         "candidate_features": feature_selection["candidate_feature_count"],
         "final_features": len(feature_cols),
         "feature_selection": feature_selection,
-        "models": [name for name, _, _ in specs],
+        "models": [group["name"] for group in model_groups],
+        "candidates_per_model": CANDIDATES_PER_MODEL,
+        "candidate_count_total": sum(len(group["candidates"]) for group in model_groups),
     }, indent=2))
 
-    for name, model_type, factory in specs:
+    for group in model_groups:
+        name = group["name"]
+        model_type = group["model_type"]
+        candidates = group["candidates"]
         try:
-            print(f"Running engineered model: {name}")
-            validation_model, validation_model_type = fit_model(
-                factory,
-                fit_high_volume[feature_cols],
-                fit_high_volume["target_up"],
-                model_type,
-            )
-            validation_scores = predict_signal(validation_model, validation[feature_cols])
-            long_threshold, short_threshold, allow_short, score_margin, validation_metrics = select_thresholds(validation, validation_scores)
+            print(f"Running engineered model group: {name} with {len(candidates)} candidates")
+            candidate_trials = []
+            best_trial = None
+
+            for candidate in candidates:
+                try:
+                    print(f"Running candidate: {candidate['candidate_name']}")
+                    validation_model, validation_model_type = fit_model(
+                        candidate["factory"],
+                        fit_high_volume[feature_cols],
+                        fit_high_volume["target_up"],
+                        model_type,
+                        candidate.get("fallback_factory"),
+                    )
+                    validation_scores = predict_signal(validation_model, validation[feature_cols])
+                    long_threshold, short_threshold, allow_short, score_margin, validation_metrics = select_thresholds(validation, validation_scores)
+                    trial = {
+                        "candidate_name": candidate["candidate_name"],
+                        "candidate_index": candidate["candidate_index"],
+                        "status": "ok",
+                        "model_type": validation_model_type,
+                        "selected_threshold": round(float(long_threshold), 6),
+                        "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
+                        "selected_score_margin": round(float(score_margin), 6),
+                        "strategy_side": "long_short" if allow_short else "long_only",
+                        "hyperparameters": safe_json_params(candidate["params"]),
+                        **validation_metrics,
+                    }
+                    candidate_trials.append(trial)
+                    if best_trial is None or validation_rank(trial) > validation_rank(best_trial):
+                        best_trial = {
+                            **trial,
+                            "candidate": candidate,
+                            "long_threshold": long_threshold,
+                            "short_threshold": short_threshold,
+                            "allow_short": allow_short,
+                            "score_margin": score_margin,
+                        }
+                except Exception as candidate_error:
+                    candidate_trials.append({
+                        "candidate_name": candidate["candidate_name"],
+                        "candidate_index": candidate["candidate_index"],
+                        "status": "error",
+                        "message": str(candidate_error),
+                        "hyperparameters": safe_json_params(candidate["params"]),
+                    })
+
+            if best_trial is None:
+                raise RuntimeError(f"No successful validation candidate for {name}")
+
+            selected_candidate = best_trial["candidate"]
+            long_threshold = float(best_trial["long_threshold"])
+            short_threshold = best_trial["short_threshold"]
+            allow_short = bool(best_trial["allow_short"])
+            score_margin = float(best_trial["score_margin"])
+            validation_metrics = {
+                key: value
+                for key, value in best_trial.items()
+                if key.startswith("validation_")
+            }
 
             final_model, final_model_type = fit_model(
-                factory,
+                selected_candidate["factory"],
                 train_full_high_volume[feature_cols],
                 train_full_high_volume["target_up"],
-                validation_model_type,
+                best_trial["model_type"],
+                selected_candidate.get("fallback_factory"),
             )
             scores = predict_signal(final_model, test[feature_cols])
             result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short, score_margin)
@@ -754,7 +859,8 @@ def run():
                 "status": "ok",
                 "message": (
                     f"Engineered features with normalized first-order inputs and re-normalized second-order interactions. "
-                    f"Validation-selected threshold and score margin; Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
+                    f"Best of {len(candidates)} validation candidates selected before the latest two-year test; "
+                    f"Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
                 ),
                 "backtest_start": str(test["date"].iloc[0]),
                 "backtest_end": str(test["date"].iloc[-1]),
@@ -780,6 +886,11 @@ def run():
                 "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
                 "selected_score_margin": round(float(score_margin), 6),
                 "strategy_side": "long_short" if allow_short else "long_only",
+                "selected_candidate": best_trial["candidate_name"],
+                "selected_candidate_index": int(best_trial["candidate_index"]),
+                "candidate_count": len(candidates),
+                "selected_hyperparameters": safe_json_params(selected_candidate["params"]),
+                "candidate_trials": sorted(candidate_trials, key=validation_rank, reverse=True),
                 "sharpe_target": SHARPE_TARGET,
                 "target_met": target_met,
                 **gate,
@@ -833,8 +944,9 @@ def run():
         "training_window": f"{data['date'].iloc[0]} to {data['date'].iloc[validation_start_index - 1]}",
         "validation_window": f"{data['date'].iloc[validation_start_index]} to {data['date'].iloc[test_start_index - 1]}",
         "backtest_window": f"{test['date'].iloc[0]} to {test['date'].iloc[-1]}",
-        "batch_size": 1,
-        "models_requested": len(specs),
+        "batch_size": CANDIDATES_PER_MODEL,
+        "models_requested": len(model_groups),
+        "candidate_count_total": sum(len(group["candidates"]) for group in model_groups),
         "sharpe_target": SHARPE_TARGET,
         "transaction_cost_bps": TRANSACTION_COST_BPS,
         "slippage_bps": SLIPPAGE_BPS,

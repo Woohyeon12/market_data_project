@@ -559,6 +559,9 @@ type ShowcaseModel = {
   selectedShortThreshold?: number | null;
   selectedScoreMargin?: number | null;
   strategySide?: string | null;
+  selectedCandidate?: string | null;
+  selectedCandidateIndex?: number | null;
+  candidateCount?: number | null;
   validationSharpeRatio?: number | null;
   sharpeTarget?: number | null;
   targetMet?: boolean | null;
@@ -809,6 +812,9 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     selectedShortThreshold: model.selected_short_threshold,
     selectedScoreMargin: model.selected_score_margin,
     strategySide: model.strategy_side,
+    selectedCandidate: model.selected_candidate,
+    selectedCandidateIndex: model.selected_candidate_index,
+    candidateCount: model.candidate_count,
     validationSharpeRatio: model.validation_sharpe_ratio,
     sharpeTarget: model.sharpe_target,
     targetMet: model.target_met,
@@ -1733,6 +1739,16 @@ export function ResearchDashboard() {
                   <div>
                     <span>Strategy side</span>
                     <strong>{selectedModel.strategySide ?? "long_only"}</strong>
+                  </div>
+                  <div>
+                    <span>Candidate search</span>
+                    <strong>
+                      {selectedModel.selectedCandidate
+                        ? `${selectedModel.selectedCandidate} / best of ${selectedModel.candidateCount ?? 1}`
+                        : selectedModel.candidateCount
+                          ? `best of ${selectedModel.candidateCount}`
+                          : "single"}
+                    </strong>
                   </div>
                 </div>
                 {selectedModel.equityCurve.length ? (
