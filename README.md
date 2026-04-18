@@ -89,6 +89,7 @@ The folder `kaggle/volume_boosting_gpu` contains a Kaggle notebook script for hi
 - It normalizes first-order variables such as volume, trend flags, rolling values, RSI, candle size, 7/30-day lags, Bollinger Bands, and golden-cross signals.
 - It creates arithmetic second-order features from selected normalized variables, then re-normalizes those interaction features before training.
 - It selects long-only or long/short signal thresholds from a pre-test validation window and records whether the latest two-year Sharpe meets the research target.
+- It calculates net performance after transaction cost and slippage assumptions, then records rejection reasons when package-candidate gates fail.
 - It writes `run_summary.json`, split metrics, correlations, feature importance, and predictions.
 
 See `docs/model-regime-validation-plan.md` for the regime filter, walk-forward, and package-candidate gates that should be added before treating a model as sellable.

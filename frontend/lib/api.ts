@@ -132,7 +132,9 @@ export type CorrelationAnalysis = {
 export type ModelEquityPoint = {
   date: string;
   equity: number;
+  gross_equity?: number | null;
   daily_return_pct: number;
+  gross_daily_return_pct?: number | null;
   position: number;
 };
 
@@ -166,11 +168,14 @@ export type ModelSplitMetric = {
   start: string;
   end: string;
   sharpe_ratio: number;
+  gross_sharpe_ratio?: number | null;
   win_rate_pct: number;
   total_return_pct: number;
+  gross_total_return_pct?: number | null;
   max_drawdown_pct: number;
   exposure_pct: number;
   trades: number;
+  total_transaction_cost_pct?: number | null;
   observations: number;
   active_observations: number;
 };
@@ -188,11 +193,14 @@ export type KaggleModelResult = {
   status: string;
   message: string;
   sharpe_ratio: number;
+  gross_sharpe_ratio?: number | null;
   win_rate_pct: number;
   total_return_pct: number;
+  gross_total_return_pct?: number | null;
   max_drawdown_pct: number;
   exposure_pct: number;
   trades: number;
+  total_transaction_cost_pct?: number | null;
   observations: number;
   active_observations: number;
   backtest_start?: string | null;
@@ -207,6 +215,14 @@ export type KaggleModelResult = {
   validation_sharpe_ratio?: number | null;
   sharpe_target?: number | null;
   target_met?: boolean | null;
+  package_candidate?: boolean | null;
+  rejection_reasons?: string[];
+  worst_split_sharpe?: number | null;
+  positive_split_count?: number | null;
+  split_count?: number | null;
+  validation_test_sharpe_gap?: number | null;
+  transaction_cost_bps?: number | null;
+  slippage_bps?: number | null;
   feature_importance: ModelFeatureImportance[];
   split_metrics: ModelSplitMetric[];
   split_correlations: ModelSplitCorrelation[];
@@ -224,6 +240,8 @@ export type KaggleModelRun = {
   batch_size: number;
   models_requested: number;
   sharpe_target?: number | null;
+  transaction_cost_bps?: number | null;
+  slippage_bps?: number | null;
   feature_engineering?: string | null;
   base_feature_count?: number | null;
   interaction_source_count?: number | null;

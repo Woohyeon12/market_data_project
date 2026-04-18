@@ -28,6 +28,9 @@ HIGH_VOLUME_QUANTILE = 0.70
 INTERACTION_FEATURE_LIMIT = 34
 SHARPE_TARGET = 2.0
 MIN_VALIDATION_TRADES = 18
+TRANSACTION_COST_BPS = 5.0
+SLIPPAGE_BPS = 5.0
+MIN_PACKAGE_ACTIVE_OBSERVATIONS = 40
 EPSILON = 1e-6
 
 
@@ -341,28 +344,78 @@ def backtest_from_scores(
     result.loc[high_volume & (result["score"] >= long_threshold), "position"] = 1.0
     if allow_short and short_threshold is not None:
         result.loc[high_volume & (result["score"] <= short_threshold), "position"] = -1.0
-    result["strategy_return"] = result["position"] * result["target_return_1d"] / 100
+    result["gross_strategy_return"] = result["position"] * result["target_return_1d"] / 100
+    result["position_change"] = result["position"].diff().abs().fillna(result["position"].abs())
+    result["transaction_cost"] = result["position_change"] * ((TRANSACTION_COST_BPS + SLIPPAGE_BPS) / 10000)
+    result["strategy_return"] = result["gross_strategy_return"] - result["transaction_cost"]
+    result["gross_equity"] = (1 + result["gross_strategy_return"]).cumprod()
     result["equity"] = (1 + result["strategy_return"]).cumprod()
     return result
 
 
 def metrics_for(result: pd.DataFrame) -> dict:
     returns = result["strategy_return"].fillna(0)
+    gross_returns = result.get("gross_strategy_return", result["strategy_return"]).fillna(0)
     active = result[result["position"] != 0]
     volatility = returns.std()
     sharpe = (returns.mean() / volatility) * math.sqrt(252) if volatility and not np.isnan(volatility) else 0.0
+    gross_volatility = gross_returns.std()
+    gross_sharpe = (
+        (gross_returns.mean() / gross_volatility) * math.sqrt(252)
+        if gross_volatility and not np.isnan(gross_volatility)
+        else 0.0
+    )
     equity = result["equity"].iloc[-1] if len(result) else 1.0
+    gross_equity = result.get("gross_equity", result["equity"]).iloc[-1] if len(result) else 1.0
     peak = result["equity"].cummax()
     drawdown = ((result["equity"] - peak) / peak).min() * 100 if len(result) else 0.0
     return {
         "sharpe_ratio": round(float(sharpe), 3),
+        "gross_sharpe_ratio": round(float(gross_sharpe), 3),
         "win_rate_pct": round(float((active["strategy_return"] > 0).mean() * 100), 2) if len(active) else 0.0,
         "total_return_pct": round(float((equity - 1) * 100), 3),
+        "gross_total_return_pct": round(float((gross_equity - 1) * 100), 3),
         "max_drawdown_pct": round(float(drawdown), 3),
         "exposure_pct": round(float((result["position"] != 0).mean() * 100), 2) if len(result) else 0.0,
-        "trades": int(result["position"].diff().abs().fillna(0).sum()),
+        "trades": int(result.get("position_change", result["position"].diff().abs().fillna(0)).sum()),
+        "total_transaction_cost_pct": round(float(result.get("transaction_cost", pd.Series(0, index=result.index)).sum() * 100), 3),
         "observations": int(len(result)),
         "active_observations": int(len(active)),
+    }
+
+
+def package_gate(metrics: dict, split_metrics: list[dict], validation_metrics: dict) -> dict:
+    split_sharpes = [float(row.get("sharpe_ratio", 0.0)) for row in split_metrics]
+    split_returns = [float(row.get("total_return_pct", 0.0)) for row in split_metrics]
+    split_count = len(split_metrics)
+    positive_split_count = sum(1 for value in split_returns if value > 0)
+    worst_split_sharpe = min(split_sharpes) if split_sharpes else 0.0
+    validation_sharpe = float(validation_metrics.get("validation_sharpe_ratio", 0.0))
+    validation_test_gap = round(float(validation_sharpe - metrics["sharpe_ratio"]), 3)
+    reasons = []
+
+    if metrics["sharpe_ratio"] < SHARPE_TARGET:
+        reasons.append(f"Latest two-year net Sharpe {metrics['sharpe_ratio']:.2f} is below {SHARPE_TARGET:.1f}.")
+    if worst_split_sharpe < 0:
+        reasons.append(f"Worst split Sharpe is {worst_split_sharpe:.2f}, so the model fails the split kill-switch.")
+    if positive_split_count < min(3, split_count):
+        reasons.append(f"Only {positive_split_count}/{split_count} splits are positive after costs.")
+    if validation_sharpe >= SHARPE_TARGET and validation_test_gap > 1.0:
+        reasons.append("Validation Sharpe decayed by more than 1.0 versus the latest two-year backtest.")
+    if metrics["active_observations"] < MIN_PACKAGE_ACTIVE_OBSERVATIONS:
+        reasons.append(f"Only {metrics['active_observations']} active observations, below the package gate sample floor.")
+    if metrics["total_transaction_cost_pct"] > max(1.0, abs(metrics["total_return_pct"]) * 0.35):
+        reasons.append("Estimated trading cost is large relative to net return.")
+
+    return {
+        "package_candidate": len(reasons) == 0,
+        "rejection_reasons": reasons,
+        "worst_split_sharpe": round(float(worst_split_sharpe), 3),
+        "positive_split_count": positive_split_count,
+        "split_count": split_count,
+        "validation_test_sharpe_gap": validation_test_gap,
+        "transaction_cost_bps": TRANSACTION_COST_BPS,
+        "slippage_bps": SLIPPAGE_BPS,
     }
 
 
@@ -534,6 +587,7 @@ def run():
             importances = feature_importance(final_model, feature_cols, train_full_high_volume[feature_cols], train_full_high_volume["target_up"])
             split_metrics, correlations = split_analysis(name, result, test, feature_cols, importances)
             target_met = metrics["sharpe_ratio"] >= SHARPE_TARGET
+            gate = package_gate(metrics, split_metrics, validation_metrics)
             row = {
                 "name": name,
                 "model_type": final_model_type,
@@ -564,6 +618,7 @@ def run():
                 "strategy_side": "long_short" if allow_short else "long_only",
                 "sharpe_target": SHARPE_TARGET,
                 "target_met": target_met,
+                **gate,
                 **validation_metrics,
                 **metrics,
                 "feature_importance": importances[:16],
@@ -573,7 +628,9 @@ def run():
                     {
                         "date": str(row["date"]),
                         "equity": round(float(row["equity"]), 4),
+                        "gross_equity": round(float(row["gross_equity"]), 4),
                         "daily_return_pct": round(float(row["strategy_return"] * 100), 4),
+                        "gross_daily_return_pct": round(float(row["gross_strategy_return"] * 100), 4),
                         "position": float(row["position"]),
                     }
                     for _, row in result.iloc[::max(1, len(result) // 120)].iterrows()
@@ -615,6 +672,8 @@ def run():
         "batch_size": 1,
         "models_requested": len(specs),
         "sharpe_target": SHARPE_TARGET,
+        "transaction_cost_bps": TRANSACTION_COST_BPS,
+        "slippage_bps": SLIPPAGE_BPS,
         "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions.",
         "base_feature_count": len(base_features),
         "interaction_source_count": len(interaction_sources),

@@ -43,7 +43,7 @@ A model can be labeled `Package candidate` only when all checks pass:
 ## Next Implementation Steps
 
 1. Add regime labels to Kaggle predictions and split metrics.
-2. Add transaction cost and slippage columns before Sharpe calculation.
-3. Add a model kill-switch metric: `worst_split_sharpe`.
-4. Add a rejection reason list into `run_summary.json`.
-5. Surface regime-specific performance and rejection reasons on the Models page.
+2. Done in script: add transaction cost and slippage columns before Sharpe calculation.
+3. Done in script: add a model kill-switch metric, `worst_split_sharpe`.
+4. Done in script: add a rejection reason list into `run_summary.json`.
+5. Partly done in UI contract: surface package readiness, cost drag, gross Sharpe, worst split Sharpe, and rejection reasons on the Models page after the next Kaggle run includes those fields.

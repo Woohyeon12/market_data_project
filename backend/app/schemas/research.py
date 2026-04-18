@@ -109,7 +109,9 @@ class CorrelationAnalysis(BaseModel):
 class ModelEquityPoint(BaseModel):
     date: str
     equity: float
+    gross_equity: float | None = None
     daily_return_pct: float
+    gross_daily_return_pct: float | None = None
     position: float
 
 
@@ -143,11 +145,14 @@ class ModelSplitMetric(BaseModel):
     start: str
     end: str
     sharpe_ratio: float
+    gross_sharpe_ratio: float | None = None
     win_rate_pct: float
     total_return_pct: float
+    gross_total_return_pct: float | None = None
     max_drawdown_pct: float
     exposure_pct: float
     trades: int
+    total_transaction_cost_pct: float | None = None
     observations: int
     active_observations: int
 
@@ -165,11 +170,14 @@ class KaggleModelResult(BaseModel):
     status: str
     message: str
     sharpe_ratio: float
+    gross_sharpe_ratio: float | None = None
     win_rate_pct: float
     total_return_pct: float
+    gross_total_return_pct: float | None = None
     max_drawdown_pct: float
     exposure_pct: float
     trades: int
+    total_transaction_cost_pct: float | None = None
     observations: int
     active_observations: int
     backtest_start: str | None = None
@@ -184,6 +192,14 @@ class KaggleModelResult(BaseModel):
     validation_sharpe_ratio: float | None = None
     sharpe_target: float | None = None
     target_met: bool | None = None
+    package_candidate: bool | None = None
+    rejection_reasons: list[str] = []
+    worst_split_sharpe: float | None = None
+    positive_split_count: int | None = None
+    split_count: int | None = None
+    validation_test_sharpe_gap: float | None = None
+    transaction_cost_bps: float | None = None
+    slippage_bps: float | None = None
     feature_importance: list[ModelFeatureImportance] = []
     split_metrics: list[ModelSplitMetric] = []
     split_correlations: list[ModelSplitCorrelation] = []
@@ -201,6 +217,8 @@ class KaggleModelRun(BaseModel):
     batch_size: int
     models_requested: int
     sharpe_target: float | None = None
+    transaction_cost_bps: float | None = None
+    slippage_bps: float | None = None
     feature_engineering: str | None = None
     base_feature_count: int | None = None
     interaction_source_count: int | None = None

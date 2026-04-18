@@ -531,11 +531,14 @@ type ShowcaseModel = {
   backtestStart?: string | null;
   backtestEnd?: string | null;
   sharpeRatio: number;
+  grossSharpeRatio?: number | null;
   winRatePct: number;
   totalReturnPct: number;
+  grossTotalReturnPct?: number | null;
   maxDrawdownPct: number;
   exposurePct: number;
   trades: number;
+  totalTransactionCostPct?: number | null;
   observations: number;
   activeObservations: number;
   returnSinceStartPct: number;
@@ -553,6 +556,11 @@ type ShowcaseModel = {
   validationSharpeRatio?: number | null;
   sharpeTarget?: number | null;
   targetMet?: boolean | null;
+  packageCandidate?: boolean | null;
+  worstSplitSharpe?: number | null;
+  validationTestSharpeGap?: number | null;
+  transactionCostBps?: number | null;
+  slippageBps?: number | null;
   readinessLabel: string;
   readinessTone: "ready" | "watch" | "hold";
   readinessReasons: string[];
@@ -601,6 +609,8 @@ function buildModelReadiness(model: {
   sharpeRatio: number;
   sharpeTarget?: number | null;
   targetMet?: boolean | null;
+  packageCandidate?: boolean | null;
+  rejectionReasons?: string[];
   validationSharpeRatio?: number | null;
   maxDrawdownPct: number;
   splitReturns: number[];
@@ -610,9 +620,9 @@ function buildModelReadiness(model: {
   const splitCount = Math.max(1, model.splitReturns.length);
   const positiveSplitRatio = positiveSplitCount / splitCount;
   const splitVolatility = standardDeviation(model.splitReturns);
-  const reasons: string[] = [];
+  const reasons = [...(model.rejectionReasons ?? [])];
 
-  if (model.targetMet === false || model.sharpeRatio < target) {
+  if ((model.targetMet === false || model.sharpeRatio < target) && reasons.length === 0) {
     reasons.push(`Latest 2Y Sharpe ${model.sharpeRatio.toFixed(2)} is below ${target.toFixed(1)} target`);
   }
 
@@ -637,7 +647,7 @@ function buildModelReadiness(model: {
     reasons.push(`Drawdown reached ${model.maxDrawdownPct.toFixed(1)}%`);
   }
 
-  if (reasons.length === 0) {
+  if (reasons.length === 0 && model.packageCandidate !== false) {
     return {
       label: "Package candidate",
       tone: "ready" as const,
@@ -685,11 +695,14 @@ function fromLocalModel(model: ModelBacktestResult): ShowcaseModel {
     backtestStart: model.backtest_start,
     backtestEnd: model.backtest_end,
     sharpeRatio: model.sharpe_ratio,
+    grossSharpeRatio: model.sharpe_ratio,
     winRatePct: model.win_rate_pct,
     totalReturnPct: model.total_return_pct,
+    grossTotalReturnPct: model.total_return_pct,
     maxDrawdownPct: model.max_drawdown_pct,
     exposurePct: model.exposure_pct,
     trades: model.trades,
+    totalTransactionCostPct: 0,
     observations: model.observations,
     activeObservations: model.observations,
     returnSinceStartPct,
@@ -722,6 +735,8 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     sharpeRatio: model.sharpe_ratio,
     sharpeTarget: model.sharpe_target,
     targetMet: model.target_met,
+    packageCandidate: model.package_candidate,
+    rejectionReasons: model.rejection_reasons,
     validationSharpeRatio: model.validation_sharpe_ratio,
     maxDrawdownPct: model.max_drawdown_pct,
     splitReturns,
@@ -738,11 +753,14 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     backtestStart: model.backtest_start,
     backtestEnd: model.backtest_end,
     sharpeRatio: model.sharpe_ratio,
+    grossSharpeRatio: model.gross_sharpe_ratio,
     winRatePct: model.win_rate_pct,
     totalReturnPct: model.total_return_pct,
+    grossTotalReturnPct: model.gross_total_return_pct,
     maxDrawdownPct: model.max_drawdown_pct,
     exposurePct: model.exposure_pct,
     trades: model.trades,
+    totalTransactionCostPct: model.total_transaction_cost_pct,
     observations: model.observations,
     activeObservations: model.active_observations,
     returnSinceStartPct,
@@ -760,6 +778,11 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     validationSharpeRatio: model.validation_sharpe_ratio,
     sharpeTarget: model.sharpe_target,
     targetMet: model.target_met,
+    packageCandidate: model.package_candidate,
+    worstSplitSharpe: model.worst_split_sharpe,
+    validationTestSharpeGap: model.validation_test_sharpe_gap,
+    transactionCostBps: model.transaction_cost_bps,
+    slippageBps: model.slippage_bps,
     readinessLabel: readiness.label,
     readinessTone: readiness.tone,
     readinessReasons: readiness.reasons,
@@ -1607,6 +1630,18 @@ export function ResearchDashboard() {
                   <div>
                     <span>Validation Sharpe</span>
                     <strong>{selectedModel.validationSharpeRatio !== null && selectedModel.validationSharpeRatio !== undefined ? selectedModel.validationSharpeRatio.toFixed(2) : "n/a"}</strong>
+                  </div>
+                  <div>
+                    <span>Gross Sharpe</span>
+                    <strong>{selectedModel.grossSharpeRatio !== null && selectedModel.grossSharpeRatio !== undefined ? selectedModel.grossSharpeRatio.toFixed(2) : "n/a"}</strong>
+                  </div>
+                  <div>
+                    <span>Cost drag</span>
+                    <strong>{selectedModel.totalTransactionCostPct !== null && selectedModel.totalTransactionCostPct !== undefined ? `${selectedModel.totalTransactionCostPct.toFixed(2)}%` : "n/a"}</strong>
+                  </div>
+                  <div>
+                    <span>Worst split Sharpe</span>
+                    <strong>{selectedModel.worstSplitSharpe !== null && selectedModel.worstSplitSharpe !== undefined ? selectedModel.worstSplitSharpe.toFixed(2) : "n/a"}</strong>
                   </div>
                   <div>
                     <span>Feature count</span>
