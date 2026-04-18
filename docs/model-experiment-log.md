@@ -59,3 +59,22 @@ This log records each small model experiment so weak runs are not repeated and s
 - Check: Git staging succeeded after the permission refresh.
 - Validation done: `npm.cmd run build` and `py -m py_compile`.
 - Decision: Commit and push the base-feature-floor experiment plus the Models UI auditability pass, then launch Experiment 001 on Kaggle.
+
+## 2026-04-19 04:42 KST - Experiment 001 Result
+
+- Kaggle version: 6.
+- Candidate pool: 2,146 features.
+- Selected features: 200.
+- Selected base features: 30.
+- Selected interaction features: 170.
+- Base floor met: false.
+- Best model: `extra_trees_engineered`.
+- Net Sharpe: -0.536.
+- Gross Sharpe: -0.365.
+- Net total return: -22.474%.
+- Win rate: 50.00%.
+- Max drawdown: -34.733%.
+- Active observations: 62.
+- Package candidate: false.
+- Read: The result is only a tiny improvement over the prior -0.553 Sharpe and still clearly unsellable. The important finding is implementation-related: the base-feature floor missed because base candidates were still constrained by the top-900 prefilter, so only 30 base features were available to the floor pass.
+- Next hypothesis: Build the base-feature floor from the full normalized base-feature pool before applying the interaction prefilter, then rerun.
