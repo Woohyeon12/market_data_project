@@ -17,6 +17,10 @@ SYMBOLS = {
     "sp500": "^GSPC",
     "nasdaq": "^IXIC",
     "gold": "GC=F",
+    "silver": "SI=F",
+    "oil": "CL=F",
+    "vix": "^VIX",
+    "dxy": "DX-Y.NYB",
     "us10y": "^TNX",
     "us30y": "^TYX",
     "us5y": "^FVX",
@@ -25,7 +29,10 @@ SYMBOLS = {
 TRAIN_END_OFFSET = 504
 VALIDATION_OFFSET = 252
 HIGH_VOLUME_QUANTILE = 0.70
-INTERACTION_FEATURE_LIMIT = 34
+INTERACTION_FEATURE_LIMIT = 32
+FINAL_FEATURE_LIMIT = 200
+FEATURE_PREFILTER_LIMIT = 900
+MAX_FEATURE_CORRELATION = 0.68
 SHARPE_TARGET = 2.0
 MIN_VALIDATION_TRADES = 18
 TRANSACTION_COST_BPS = 5.0
@@ -95,8 +102,13 @@ def add_market_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     add("btc_return_7d", pct_change(close, 7))
     add("btc_return_14d", pct_change(close, 14))
     add("btc_return_30d", pct_change(close, 30))
+    add("btc_return_60d", pct_change(close, 60))
+    add("btc_return_lag_1", pct_change(close, 1).shift(1))
+    add("btc_return_lag_3", pct_change(close, 1).shift(3))
     add("btc_return_lag_7", pct_change(close, 1).shift(7))
+    add("btc_return_lag_14", pct_change(close, 1).shift(14))
     add("btc_return_lag_30", pct_change(close, 1).shift(30))
+    add("btc_gap_pct", (open_ / close.shift(1) - 1) * 100)
 
     candle_range = (high - low).replace(0, np.nan)
     add("btc_candle_range_pct", candle_range / close * 100)
@@ -106,6 +118,8 @@ def add_market_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     add("btc_lower_wick_pct", (np.minimum(open_, close) - low) / close * 100)
     add("btc_close_location", (close - low) / candle_range)
     add("btc_green_candle_flag", (close > open_).astype(float))
+    add("btc_body_to_range", (close - open_).abs() / candle_range)
+    add("btc_range_expansion_20d", candle_range / candle_range.rolling(20).mean())
 
     log_volume = np.log1p(volume)
     add("btc_log_volume", log_volume)
@@ -113,6 +127,7 @@ def add_market_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     add("btc_volume_diff_7d", volume.diff(7))
     add("btc_volume_pct_1d", pct_change(volume, 1))
     add("btc_volume_pct_7d", pct_change(volume, 7))
+    add("btc_volume_pct_30d", pct_change(volume, 30))
     for window in [7, 20, 30, 60]:
         add(f"btc_volume_ratio_{window}d", volume / volume.rolling(window).mean())
         add(f"btc_volume_z_{window}d", (volume - volume.rolling(window).mean()) / volume.rolling(window).std())
@@ -121,9 +136,11 @@ def add_market_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         add(f"btc_rolling_mean_distance_{window}d", (close / close.rolling(window).mean() - 1) * 100)
         add(f"btc_rolling_volatility_{window}d", pct_change(close, 1).rolling(window).std())
         add(f"btc_rolling_position_{window}d", rolling_position(close, window))
+        add(f"btc_return_z_{window}d", (pct_change(close, 1) - pct_change(close, 1).rolling(window).mean()) / pct_change(close, 1).rolling(window).std())
 
     for window in [30, 60, 120]:
         add(f"btc_drawdown_{window}d", drawdown(close, window))
+        add(f"btc_drawdown_change_{window}d", drawdown(close, window).diff())
 
     add("btc_rsi_7", rsi(close, 7))
     add("btc_rsi_14", rsi(close, 14))
@@ -154,16 +171,44 @@ def add_market_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     add("btc_bollinger_percent_b_20d", (close - bb_lower) / (bb_upper - bb_lower).replace(0, np.nan))
     add("btc_bollinger_upper_distance_20d", (close / bb_upper - 1) * 100)
     add("btc_bollinger_lower_distance_20d", (close / bb_lower - 1) * 100)
+    add("btc_bollinger_width_change_20d", ((bb_upper - bb_lower) / bb_middle * 100).diff())
 
-    for prefix in ["sp500", "nasdaq", "gold"]:
+    btc_return_1d = pct_change(close, 1)
+    for prefix in ["sp500", "nasdaq", "gold", "silver", "oil", "vix", "dxy"]:
+        if f"{prefix}_close" not in data:
+            continue
+        asset_return_1d = pct_change(data[f"{prefix}_close"], 1)
         add(f"{prefix}_return_1d", pct_change(data[f"{prefix}_close"], 1))
+        add(f"{prefix}_return_5d", pct_change(data[f"{prefix}_close"], 5))
         add(f"{prefix}_return_7d", pct_change(data[f"{prefix}_close"], 7))
+        add(f"{prefix}_return_20d", pct_change(data[f"{prefix}_close"], 20))
         add(f"{prefix}_return_30d", pct_change(data[f"{prefix}_close"], 30))
+        add(f"{prefix}_return_60d", pct_change(data[f"{prefix}_close"], 60))
+        add(f"{prefix}_rolling_volatility_20d", asset_return_1d.rolling(20).std())
+        add(f"{prefix}_rolling_position_60d", rolling_position(data[f"{prefix}_close"], 60))
+        add(f"btc_{prefix}_rolling_corr_30d", btc_return_1d.rolling(30).corr(asset_return_1d))
 
     for prefix in ["us10y", "us30y", "us5y"]:
+        if f"{prefix}_close" not in data:
+            continue
         add(f"{prefix}_bp_chg_1d", data[f"{prefix}_close"].diff() * 100)
         add(f"{prefix}_bp_chg_7d", data[f"{prefix}_close"].diff(7) * 100)
         add(f"{prefix}_bp_chg_30d", data[f"{prefix}_close"].diff(30) * 100)
+        add(f"{prefix}_level_z_120d", (data[f"{prefix}_close"] - data[f"{prefix}_close"].rolling(120).mean()) / data[f"{prefix}_close"].rolling(120).std())
+
+    if {"us10y_close", "us5y_close"}.issubset(data.columns):
+        add("us10y_us5y_spread", data["us10y_close"] - data["us5y_close"])
+        add("us10y_us5y_spread_chg_20d", (data["us10y_close"] - data["us5y_close"]).diff(20))
+    if {"us30y_close", "us10y_close"}.issubset(data.columns):
+        add("us30y_us10y_spread", data["us30y_close"] - data["us10y_close"])
+    if {"gold_close", "silver_close"}.issubset(data.columns):
+        add("gold_silver_ratio", data["gold_close"] / data["silver_close"])
+    if {"nasdaq_close", "sp500_close"}.issubset(data.columns):
+        add("nasdaq_sp500_relative_20d", pct_change(data["nasdaq_close"], 20) - pct_change(data["sp500_close"], 20))
+    if "vix_close" in data:
+        add("vix_term_proxy_20d", data["vix_close"] - data["vix_close"].rolling(20).mean())
+    if {"dxy_close", "gold_close"}.issubset(data.columns):
+        add("dxy_gold_relative_20d", pct_change(data["dxy_close"], 20) - pct_change(data["gold_close"], 20))
 
     data["high_volume_candle"] = volume >= volume.rolling(252).quantile(HIGH_VOLUME_QUANTILE)
     data["target_return_1d"] = pct_change(close, 1).shift(-1)
@@ -184,8 +229,11 @@ def build_dataset() -> tuple[pd.DataFrame, list[str]]:
     for prefix, symbol in SYMBOLS.items():
         if prefix == "btc":
             continue
-        chart = fetch_yahoo_chart(symbol)[["date", "close"]].rename(columns={"close": f"{prefix}_close"})
-        data = data.merge(chart, on="date", how="left")
+        try:
+            chart = fetch_yahoo_chart(symbol)[["date", "close"]].rename(columns={"close": f"{prefix}_close"})
+            data = data.merge(chart, on="date", how="left")
+        except Exception as error:
+            print(f"Optional symbol {prefix} ({symbol}) skipped: {error}")
 
     data = data.sort_values("date").ffill()
     data, base_features = add_market_features(data)
@@ -233,11 +281,62 @@ def build_second_order_features(normalized: pd.DataFrame, source_cols: list[str]
     return pd.DataFrame(interactions, index=normalized.index).replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 
+def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, base_feature_count: int) -> tuple[list[str], dict]:
+    target_scores = features.corrwith(target).abs().replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    ranked = target_scores.sort_values(ascending=False)
+    candidates = ranked.index[:min(FEATURE_PREFILTER_LIMIT, len(ranked))].tolist()
+    candidate_corr = features[candidates].corr().abs().replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    selected: list[str] = []
+    selected_set: set[str] = set()
+
+    for max_corr_allowed in [MAX_FEATURE_CORRELATION, 0.78, 0.88, 0.96, 1.01]:
+        for column in candidates:
+            if column in selected_set:
+                continue
+            if not selected:
+                selected.append(column)
+                selected_set.add(column)
+                continue
+
+            max_corr = float(candidate_corr.loc[column, selected].max())
+            if max_corr <= max_corr_allowed:
+                selected.append(column)
+                selected_set.add(column)
+
+            if len(selected) >= FINAL_FEATURE_LIMIT:
+                break
+
+        if len(selected) >= FINAL_FEATURE_LIMIT:
+            break
+
+    selected = selected[:FINAL_FEATURE_LIMIT]
+    selected_corr = features[selected].corr().abs() if len(selected) > 1 else pd.DataFrame()
+    if len(selected) > 1:
+        upper = selected_corr.where(np.triu(np.ones(selected_corr.shape), k=1).astype(bool))
+        max_pairwise_corr = float(upper.max().max())
+    else:
+        max_pairwise_corr = 0.0
+
+    summary = {
+        "method": "target-ranked greedy low-correlation selection on pre-test training data",
+        "candidate_feature_count": int(features.shape[1]),
+        "prefilter_feature_count": int(len(candidates)),
+        "selected_feature_count": int(len(selected)),
+        "base_feature_count": int(base_feature_count),
+        "selected_base_feature_count": int(sum(1 for column in selected if column.startswith("z_"))),
+        "selected_interaction_feature_count": int(sum(1 for column in selected if column.startswith("z2_"))),
+        "max_allowed_pairwise_correlation": MAX_FEATURE_CORRELATION,
+        "observed_max_pairwise_correlation": round(max_pairwise_corr, 4),
+        "mean_abs_target_correlation": round(float(target_scores[selected].mean()), 5) if selected else 0.0,
+    }
+    return selected, summary
+
+
 def build_model_matrices(
     data: pd.DataFrame,
     base_features: list[str],
     test_start_index: int,
-) -> tuple[pd.DataFrame, list[str], list[str]]:
+) -> tuple[pd.DataFrame, list[str], list[str], dict]:
     train_all = data.iloc[:test_start_index].copy()
     base_means, base_stds = fit_standardizer(train_all, base_features)
     base_normalized = apply_standardizer(data, base_features, base_means, base_stds)
@@ -255,8 +354,14 @@ def build_model_matrices(
     normalized_interactions = apply_standardizer(raw_interactions, list(raw_interactions.columns), interaction_means, interaction_stds)
     normalized_interactions.columns = [f"z2_{column}" for column in normalized_interactions.columns]
 
-    features = pd.concat([base_normalized, normalized_interactions], axis=1).replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    return features, list(features.columns), interaction_sources
+    feature_candidates = pd.concat([base_normalized, normalized_interactions], axis=1).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    selected_features, feature_selection = select_low_correlation_features(
+        feature_candidates.iloc[:test_start_index],
+        train_all["target_return_1d"],
+        len(base_features),
+    )
+    features = feature_candidates[selected_features].copy()
+    return features, selected_features, interaction_sources, feature_selection
 
 
 def model_specs():
@@ -533,7 +638,7 @@ def run():
 
     test_start_index = len(data) - TRAIN_END_OFFSET
     validation_start_index = test_start_index - VALIDATION_OFFSET
-    feature_matrix, feature_cols, interaction_sources = build_model_matrices(data, base_features, test_start_index)
+    feature_matrix, feature_cols, interaction_sources, feature_selection = build_model_matrices(data, base_features, test_start_index)
     model_frame = pd.concat(
         [
             data[["date", "target_return_1d", "target_up", "high_volume_candle"]].reset_index(drop=True),
@@ -559,7 +664,9 @@ def run():
     print(json.dumps({
         "base_features": len(base_features),
         "interaction_sources": len(interaction_sources),
+        "candidate_features": feature_selection["candidate_feature_count"],
         "final_features": len(feature_cols),
+        "feature_selection": feature_selection,
         "models": [name for name, _, _ in specs],
     }, indent=2))
 
@@ -612,6 +719,9 @@ def run():
                     "normalized_second_order_arithmetic",
                 ],
                 "feature_count": len(feature_cols),
+                "feature_candidate_count": feature_selection["candidate_feature_count"],
+                "selected_feature_count": feature_selection["selected_feature_count"],
+                "feature_selection": feature_selection,
                 "interaction_source_count": len(interaction_sources),
                 "selected_threshold": round(float(long_threshold), 6),
                 "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
@@ -677,7 +787,10 @@ def run():
         "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions.",
         "base_feature_count": len(base_features),
         "interaction_source_count": len(interaction_sources),
+        "feature_candidate_count": feature_selection["candidate_feature_count"],
+        "selected_feature_count": feature_selection["selected_feature_count"],
         "final_feature_count": len(feature_cols),
+        "feature_selection": feature_selection,
         "models": sorted(model_rows, key=lambda row: row.get("sharpe_ratio", -999), reverse=True),
     }
 

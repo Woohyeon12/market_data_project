@@ -550,6 +550,8 @@ type ShowcaseModel = {
   splitReturns: number[];
   features: string[];
   featureCount?: number | null;
+  featureCandidateCount?: number | null;
+  selectedFeatureCount?: number | null;
   selectedThreshold?: number | null;
   selectedShortThreshold?: number | null;
   strategySide?: string | null;
@@ -713,6 +715,9 @@ function fromLocalModel(model: ModelBacktestResult): ShowcaseModel {
     splitReturnStd: standardDeviation(splitReturns),
     splitReturns,
     features: model.features,
+    featureCount: model.features.length,
+    featureCandidateCount: model.features.length,
+    selectedFeatureCount: model.features.length,
     readinessLabel: readiness.label,
     readinessTone: readiness.tone,
     readinessReasons: readiness.reasons,
@@ -772,6 +777,8 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     splitReturns,
     features: model.features,
     featureCount: model.feature_count,
+    featureCandidateCount: model.feature_candidate_count,
+    selectedFeatureCount: model.selected_feature_count,
     selectedThreshold: model.selected_threshold,
     selectedShortThreshold: model.selected_short_threshold,
     strategySide: model.strategy_side,
@@ -1645,7 +1652,11 @@ export function ResearchDashboard() {
                   </div>
                   <div>
                     <span>Feature count</span>
-                    <strong>{selectedModel.featureCount?.toLocaleString() ?? selectedModel.features.length.toLocaleString()}</strong>
+                    <strong>{selectedModel.selectedFeatureCount?.toLocaleString() ?? selectedModel.featureCount?.toLocaleString() ?? selectedModel.features.length.toLocaleString()}</strong>
+                  </div>
+                  <div>
+                    <span>Candidate pool</span>
+                    <strong>{selectedModel.featureCandidateCount?.toLocaleString() ?? "n/a"}</strong>
                   </div>
                   <div>
                     <span>Signal threshold</span>

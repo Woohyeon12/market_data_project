@@ -185,6 +185,9 @@ class KaggleModelResult(BaseModel):
     features: list[str] = []
     feature_engineering: list[str] = []
     feature_count: int | None = None
+    feature_candidate_count: int | None = None
+    selected_feature_count: int | None = None
+    feature_selection: dict[str, float | int | str] = {}
     interaction_source_count: int | None = None
     selected_threshold: float | None = None
     selected_short_threshold: float | None = None
@@ -222,7 +225,10 @@ class KaggleModelRun(BaseModel):
     feature_engineering: str | None = None
     base_feature_count: int | None = None
     interaction_source_count: int | None = None
+    feature_candidate_count: int | None = None
+    selected_feature_count: int | None = None
     final_feature_count: int | None = None
+    feature_selection: dict[str, float | int | str] = {}
     models: list[KaggleModelResult] = []
 
 
