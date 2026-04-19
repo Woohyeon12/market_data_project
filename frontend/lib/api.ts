@@ -228,6 +228,7 @@ export type KaggleModelResult = {
   selected_score_margin?: number | null;
   selected_min_hold_days?: number | null;
   selected_cooldown_days?: number | null;
+  selected_uncertainty_margin?: number | null;
   strategy_side?: string | null;
   selected_candidate?: string | null;
   selected_candidate_index?: number | null;
@@ -236,6 +237,14 @@ export type KaggleModelResult = {
   selected_hyperparameters?: Record<string, number | string | boolean | null>;
   candidate_trials?: Record<string, number | string | boolean | null | Record<string, number | string | boolean | null>>[];
   validation_sharpe_ratio?: number | null;
+  validation_worst_split_sharpe?: number | null;
+  validation_last_split_sharpe?: number | null;
+  validation_positive_split_count?: number | null;
+  validation_split_count?: number | null;
+  validation_split_sharpe_std?: number | null;
+  validation_recent_decay_penalty?: number | null;
+  validation_uncertainty_suppressed_pct?: number | null;
+  uncertainty_suppressed_pct?: number | null;
   sharpe_target?: number | null;
   target_met?: boolean | null;
   package_candidate?: boolean | null;

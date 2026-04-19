@@ -569,12 +569,19 @@ type ShowcaseModel = {
   selectedScoreMargin?: number | null;
   selectedMinHoldDays?: number | null;
   selectedCooldownDays?: number | null;
+  selectedUncertaintyMargin?: number | null;
   strategySide?: string | null;
   selectedCandidate?: string | null;
   selectedCandidateIndex?: number | null;
   candidateCount?: number | null;
   selectedValidationScore?: number | null;
   validationSharpeRatio?: number | null;
+  validationWorstSplitSharpe?: number | null;
+  validationLastSplitSharpe?: number | null;
+  validationPositiveSplitCount?: number | null;
+  validationSplitCount?: number | null;
+  validationRecentDecayPenalty?: number | null;
+  uncertaintySuppressedPct?: number | null;
   sharpeTarget?: number | null;
   targetMet?: boolean | null;
   packageCandidate?: boolean | null;
@@ -834,12 +841,19 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     selectedScoreMargin: model.selected_score_margin,
     selectedMinHoldDays: model.selected_min_hold_days,
     selectedCooldownDays: model.selected_cooldown_days,
+    selectedUncertaintyMargin: model.selected_uncertainty_margin,
     strategySide: model.strategy_side,
     selectedCandidate: model.selected_candidate,
     selectedCandidateIndex: model.selected_candidate_index,
     candidateCount: model.candidate_count,
     selectedValidationScore: model.selected_validation_score,
     validationSharpeRatio: model.validation_sharpe_ratio,
+    validationWorstSplitSharpe: model.validation_worst_split_sharpe,
+    validationLastSplitSharpe: model.validation_last_split_sharpe,
+    validationPositiveSplitCount: model.validation_positive_split_count,
+    validationSplitCount: model.validation_split_count,
+    validationRecentDecayPenalty: model.validation_recent_decay_penalty,
+    uncertaintySuppressedPct: model.uncertainty_suppressed_pct,
     sharpeTarget: model.sharpe_target,
     targetMet: model.target_met,
     packageCandidate: model.package_candidate,
@@ -1782,6 +1796,22 @@ export function ResearchDashboard() {
                     </strong>
                   </div>
                   <div>
+                    <span>No-trade filter</span>
+                    <strong>
+                      {selectedModel.selectedUncertaintyMargin !== null && selectedModel.selectedUncertaintyMargin !== undefined
+                        ? `${selectedModel.selectedUncertaintyMargin.toFixed(3)} margin`
+                        : "off"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Filtered test days</span>
+                    <strong>
+                      {selectedModel.uncertaintySuppressedPct !== null && selectedModel.uncertaintySuppressedPct !== undefined
+                        ? `${selectedModel.uncertaintySuppressedPct.toFixed(1)}%`
+                        : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
                     <span>Signal threshold</span>
                     <strong>
                       {selectedModel.selectedThreshold !== null && selectedModel.selectedThreshold !== undefined ? selectedModel.selectedThreshold.toFixed(4) : "n/a"}
@@ -1823,6 +1853,22 @@ export function ResearchDashboard() {
                     <strong>
                       {selectedModel.selectedValidationScore !== null && selectedModel.selectedValidationScore !== undefined
                         ? selectedModel.selectedValidationScore.toFixed(3)
+                        : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Validation split floor</span>
+                    <strong>
+                      {selectedModel.validationWorstSplitSharpe !== null && selectedModel.validationWorstSplitSharpe !== undefined
+                        ? `${selectedModel.validationWorstSplitSharpe.toFixed(2)} worst`
+                        : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Recent validation</span>
+                    <strong>
+                      {selectedModel.validationLastSplitSharpe !== null && selectedModel.validationLastSplitSharpe !== undefined
+                        ? `${selectedModel.validationLastSplitSharpe.toFixed(2)} last`
                         : "n/a"}
                     </strong>
                   </div>

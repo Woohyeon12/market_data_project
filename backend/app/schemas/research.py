@@ -205,6 +205,7 @@ class KaggleModelResult(BaseModel):
     selected_score_margin: float | None = None
     selected_min_hold_days: int | None = None
     selected_cooldown_days: int | None = None
+    selected_uncertainty_margin: float | None = None
     strategy_side: str | None = None
     selected_candidate: str | None = None
     selected_candidate_index: int | None = None
@@ -213,6 +214,14 @@ class KaggleModelResult(BaseModel):
     selected_hyperparameters: dict = {}
     candidate_trials: list[dict] = []
     validation_sharpe_ratio: float | None = None
+    validation_worst_split_sharpe: float | None = None
+    validation_last_split_sharpe: float | None = None
+    validation_positive_split_count: int | None = None
+    validation_split_count: int | None = None
+    validation_split_sharpe_std: float | None = None
+    validation_recent_decay_penalty: float | None = None
+    validation_uncertainty_suppressed_pct: float | None = None
+    uncertainty_suppressed_pct: float | None = None
     sharpe_target: float | None = None
     target_met: bool | None = None
     package_candidate: bool | None = None

@@ -29,7 +29,9 @@
 
 ### Pending Approvals
 
-- None.
+- Done: 2026-04-19 12:19 KST `KAGGLE_API_TOKEN` visibility was restored for `scripts/kaggle.cmd`; Kaggle status check returned COMPLETE without exposing the token.
+- Done: 2026-04-19 12:19 KST frontend production build passed after the Windows `spawn EPERM` blocker cleared.
+- Done: 2026-04-19 12:19 KST Git metadata write permission and GitHub network access were restored for the prepared Experiment 008 commit/push attempt.
 
 ### User Security Action
 

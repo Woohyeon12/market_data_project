@@ -286,3 +286,15 @@ This log records each small model experiment so weak runs are not repeated and s
 - Read: The requested bull/bear routed ensemble ran correctly and reduced trades slightly versus Exp6, but it worsened net Sharpe from 0.109 to -0.103 and collapsed in split 4. The validation winner had strong validation Sharpe, so the failure is likely validation/test regime decay rather than an implementation-only issue.
 - Next hypothesis: Keep the regime architecture but make selection more robust by using split-aware validation or walk-forward validation, penalizing last-validation-window decay, and adding a no-trade kill switch when the predicted regime probability is uncertain.
 - Local deployment check: backend/frontend Docker services were rebuilt and restarted; `/research/model-backtests` returns `regime_feature_count`, bull/bear component counts, and predicted test regime mix for Experiment 007.
+
+## 2026-04-19 12:00 KST - Experiment 008 Setup
+
+- Hypothesis: Exp7 overfit one validation window. The selected candidate had strong validation Sharpe but failed in the newest test split, so candidate ranking needs split-aware validation and a recent-decay penalty before the latest two-year test.
+- Change: Keep the regime classifier plus 3 bull and 3 bear routed ensemble architecture from Exp7.
+- Change: Validation threshold search now divides the validation window into three internal splits and records worst split Sharpe, last split Sharpe, positive split count, split Sharpe standard deviation, and recent validation decay.
+- Change: The validation selection score now rewards worst/last split robustness and positive split ratio while penalizing split volatility, recent validation decay, transaction cost, and trades.
+- Change: Added a regime uncertainty no-trade filter. During validation, each candidate can choose a probability margin around 0.50; if the regime classifier is too uncertain, the trade is suppressed rather than routed into bull/bear models.
+- UI/API: Added selected uncertainty margin, validation worst/last split metrics, and percent of test days suppressed by the no-trade filter.
+- Guardrail: Candidate selection remains validation-only. Latest two-year test performance must not be used to choose the candidate or the uncertainty margin.
+- Local validation: Python compile, frontend TypeScript, diff check, and token-string scan passed. Production build is blocked by Windows `spawn EPERM`; Kaggle status/run is blocked because the active environment cannot see `KAGGLE_API_TOKEN`.
+- Full backtest status: Pending Kaggle Experiment 008 run when network/Kaggle access is available.

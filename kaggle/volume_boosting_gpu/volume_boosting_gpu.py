@@ -45,10 +45,17 @@ MIN_PACKAGE_ACTIVE_OBSERVATIONS = 40
 SCORE_MARGIN_CANDIDATES = [0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1]
 CANDIDATES_PER_MODEL = 10
 RUN_REGIME_ENSEMBLE_ONLY = True
+REGIME_UNCERTAINTY_MARGINS = [0.0, 0.03, 0.05, 0.075, 0.10, 0.14]
+VALIDATION_SPLIT_COUNT = 3
 VALIDATION_RETURN_WEIGHT = 0.015
 VALIDATION_DRAWDOWN_WEIGHT = 0.015
 VALIDATION_COST_PENALTY = 0.08
 VALIDATION_TRADE_PENALTY = 0.012
+VALIDATION_WORST_SPLIT_WEIGHT = 0.35
+VALIDATION_LAST_SPLIT_WEIGHT = 0.20
+VALIDATION_POSITIVE_SPLIT_WEIGHT = 0.18
+VALIDATION_SPLIT_STD_PENALTY = 0.12
+VALIDATION_RECENT_DECAY_PENALTY = 0.25
 TURNOVER_RULE_CANDIDATES = [
     {"min_hold_days": 1, "cooldown_days": 0},
     {"min_hold_days": 2, "cooldown_days": 0},
@@ -634,6 +641,15 @@ def predict_signal(model, x: pd.DataFrame) -> np.ndarray:
     return np.asarray(model.predict(x), dtype=float)
 
 
+def regime_uncertainty_trade_mask(regime_probability: np.ndarray | None, uncertainty_margin: float, length: int) -> np.ndarray:
+    if regime_probability is None or uncertainty_margin <= 0:
+        return np.ones(length, dtype=bool)
+    probability = np.asarray(regime_probability, dtype=float)
+    if len(probability) != length:
+        raise ValueError("Regime probability length does not match the backtest frame.")
+    return np.abs(probability - 0.5) >= float(uncertainty_margin)
+
+
 def backtest_from_scores(
     frame: pd.DataFrame,
     scores: np.ndarray,
@@ -643,11 +659,17 @@ def backtest_from_scores(
     score_margin: float = 0.0,
     min_hold_days: int = 1,
     cooldown_days: int = 0,
+    trade_mask: np.ndarray | None = None,
+    no_trade_uncertainty_margin: float = 0.0,
 ) -> pd.DataFrame:
     result = frame[["date", "target_return_1d", "high_volume_candle"]].copy()
     result["score"] = scores
     result["probability"] = scores
-    high_volume = result["high_volume_candle"].to_numpy(dtype=bool)
+    allowed_by_uncertainty = np.asarray(trade_mask, dtype=bool) if trade_mask is not None else np.ones(len(result), dtype=bool)
+    if len(allowed_by_uncertainty) != len(result):
+        raise ValueError("Trade mask length does not match the backtest frame.")
+    result["trade_allowed"] = allowed_by_uncertainty
+    high_volume = result["high_volume_candle"].to_numpy(dtype=bool) & allowed_by_uncertainty
     effective_long_threshold = long_threshold + score_margin
     effective_short_threshold = short_threshold - score_margin if short_threshold is not None else None
     raw_position = np.zeros(len(result), dtype=float)
@@ -690,6 +712,7 @@ def backtest_from_scores(
     result["score_margin"] = score_margin
     result["min_hold_days"] = min_hold_days
     result["cooldown_days"] = cooldown_days
+    result["no_trade_uncertainty_margin"] = no_trade_uncertainty_margin
     result["gross_strategy_return"] = result["position"] * result["target_return_1d"] / 100
     result["position_change"] = result["position"].diff().abs().fillna(result["position"].abs())
     result["transaction_cost"] = result["position_change"] * ((TRANSACTION_COST_BPS + SLIPPAGE_BPS) / 10000)
@@ -725,6 +748,7 @@ def metrics_for(result: pd.DataFrame) -> dict:
         "exposure_pct": round(float((result["position"] != 0).mean() * 100), 2) if len(result) else 0.0,
         "trades": int(result.get("position_change", result["position"].diff().abs().fillna(0)).sum()),
         "total_transaction_cost_pct": round(float(result.get("transaction_cost", pd.Series(0, index=result.index)).sum() * 100), 3),
+        "uncertainty_suppressed_pct": round(float((~result.get("trade_allowed", pd.Series(True, index=result.index)).astype(bool)).mean() * 100), 2) if len(result) else 0.0,
         "observations": int(len(result)),
         "active_observations": int(len(active)),
     }
@@ -765,9 +789,13 @@ def package_gate(metrics: dict, split_metrics: list[dict], validation_metrics: d
     }
 
 
-def threshold_rank(metrics: dict) -> tuple[float, float, float, float, int]:
+def threshold_rank(metrics: dict) -> tuple[float, float, float, float, int, float, float, float, int]:
     return (
+        float(selection_score(metrics)),
         float(metrics.get("sharpe_ratio", -999.0)),
+        float(metrics.get("worst_split_sharpe", -999.0)),
+        float(metrics.get("last_split_sharpe", -999.0)),
+        int(metrics.get("positive_split_count", 0)),
         float(metrics.get("total_return_pct", -999.0)),
         float(metrics.get("max_drawdown_pct", -999.0)),
         -float(metrics.get("total_transaction_cost_pct", 999.0)),
@@ -775,10 +803,80 @@ def threshold_rank(metrics: dict) -> tuple[float, float, float, float, int]:
     )
 
 
-def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[float, float | None, bool, float, int, int, dict]:
+def add_split_aware_metrics(metrics: dict, result: pd.DataFrame, split_count: int = VALIDATION_SPLIT_COUNT) -> dict:
+    chunks = np.array_split(np.arange(len(result)), split_count)
+    split_sharpes = []
+    split_returns = []
+    for index_values in chunks:
+        if len(index_values) == 0:
+            continue
+        split_metric = metrics_for(result.iloc[index_values].copy())
+        split_sharpes.append(float(split_metric.get("sharpe_ratio", 0.0)))
+        split_returns.append(float(split_metric.get("total_return_pct", 0.0)))
+
+    if split_sharpes:
+        worst_split = min(split_sharpes)
+        last_split = split_sharpes[-1]
+        split_std = float(np.std(split_sharpes))
+        positive_count = sum(1 for value in split_returns if value > 0)
+        recent_decay = max(0.0, float(metrics.get("sharpe_ratio", 0.0)) - last_split)
+    else:
+        worst_split = 0.0
+        last_split = 0.0
+        split_std = 0.0
+        positive_count = 0
+        recent_decay = 0.0
+
+    metrics.update({
+        "worst_split_sharpe": round(float(worst_split), 3),
+        "last_split_sharpe": round(float(last_split), 3),
+        "positive_split_count": int(positive_count),
+        "split_count": int(len(split_sharpes)),
+        "split_sharpe_std": round(float(split_std), 3),
+        "recent_decay_penalty": round(float(recent_decay), 3),
+        "split_sharpes": [round(float(value), 3) for value in split_sharpes],
+    })
+    return metrics
+
+
+def selection_score(metrics: dict, prefix: str = "") -> float:
+    def get(name: str, default: float = 0.0) -> float:
+        return float(metrics.get(f"{prefix}{name}", metrics.get(name, default)))
+
+    sharpe = get("sharpe_ratio", -999.0)
+    total_return = get("total_return_pct", -999.0)
+    max_drawdown = get("max_drawdown_pct", -999.0)
+    cost = get("total_transaction_cost_pct", 999.0)
+    trades = get("trades", 999.0)
+    worst_split = get("worst_split_sharpe", 0.0)
+    last_split = get("last_split_sharpe", 0.0)
+    split_count = max(1.0, get("split_count", 1.0))
+    positive_split_count = get("positive_split_count", 0.0)
+    split_std = get("split_sharpe_std", 0.0)
+    recent_decay = get("recent_decay_penalty", max(0.0, sharpe - last_split))
+    positive_ratio = positive_split_count / split_count
+    return (
+        sharpe
+        + total_return * VALIDATION_RETURN_WEIGHT
+        + max_drawdown * VALIDATION_DRAWDOWN_WEIGHT
+        + worst_split * VALIDATION_WORST_SPLIT_WEIGHT
+        + last_split * VALIDATION_LAST_SPLIT_WEIGHT
+        + positive_ratio * VALIDATION_POSITIVE_SPLIT_WEIGHT
+        - cost * VALIDATION_COST_PENALTY
+        - trades * VALIDATION_TRADE_PENALTY
+        - split_std * VALIDATION_SPLIT_STD_PENALTY
+        - recent_decay * VALIDATION_RECENT_DECAY_PENALTY
+    )
+
+
+def select_thresholds(
+    validation: pd.DataFrame,
+    scores: np.ndarray,
+    regime_probability: np.ndarray | None = None,
+) -> tuple[float, float | None, bool, float, int, int, float, dict]:
     high_volume_scores = scores[validation["high_volume_candle"].to_numpy(dtype=bool)]
     if len(high_volume_scores) == 0:
-        return float(np.nanmean(scores)), None, False, 0.0, 1, 0, {"validation_sharpe_ratio": 0.0}
+        return float(np.nanmean(scores)), None, False, 0.0, 1, 0, 0.0, {"validation_sharpe_ratio": 0.0}
 
     long_quantiles = np.linspace(0.52, 0.97, 20)
     short_quantiles = np.linspace(0.03, 0.42, 18)
@@ -790,47 +888,76 @@ def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[flo
     best_margin = 0.0
     best_min_hold_days = 1
     best_cooldown_days = 0
+    best_uncertainty_margin = 0.0
     best_metrics = {"sharpe_ratio": -999.0, "total_return_pct": -999.0, "active_observations": 0}
+    uncertainty_margins = REGIME_UNCERTAINTY_MARGINS if regime_probability is not None else [0.0]
 
     for long_threshold in long_candidates:
         for score_margin in SCORE_MARGIN_CANDIDATES:
-            for turnover_rule in TURNOVER_RULE_CANDIDATES:
-                result = backtest_from_scores(validation, scores, long_threshold, score_margin=score_margin, **turnover_rule)
-                metrics = metrics_for(result)
-                if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-                    continue
-                if threshold_rank(metrics) > threshold_rank(best_metrics):
-                    best_long = long_threshold
-                    best_short = None
-                    best_allow_short = False
-                    best_margin = score_margin
-                    best_min_hold_days = turnover_rule["min_hold_days"]
-                    best_cooldown_days = turnover_rule["cooldown_days"]
-                    best_metrics = metrics
+            for uncertainty_margin in uncertainty_margins:
+                trade_mask = regime_uncertainty_trade_mask(regime_probability, uncertainty_margin, len(validation))
+                for turnover_rule in TURNOVER_RULE_CANDIDATES:
+                    result = backtest_from_scores(
+                        validation,
+                        scores,
+                        long_threshold,
+                        score_margin=score_margin,
+                        trade_mask=trade_mask,
+                        no_trade_uncertainty_margin=uncertainty_margin,
+                        **turnover_rule,
+                    )
+                    metrics = add_split_aware_metrics(metrics_for(result), result)
+                    if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                        continue
+                    if threshold_rank(metrics) > threshold_rank(best_metrics):
+                        best_long = long_threshold
+                        best_short = None
+                        best_allow_short = False
+                        best_margin = score_margin
+                        best_min_hold_days = turnover_rule["min_hold_days"]
+                        best_cooldown_days = turnover_rule["cooldown_days"]
+                        best_uncertainty_margin = uncertainty_margin
+                        best_metrics = metrics
 
     for long_threshold in long_candidates:
         for short_threshold in short_candidates:
             if short_threshold >= long_threshold:
                 continue
             for score_margin in SCORE_MARGIN_CANDIDATES:
-                for turnover_rule in TURNOVER_RULE_CANDIDATES:
-                    result = backtest_from_scores(validation, scores, long_threshold, short_threshold, allow_short=True, score_margin=score_margin, **turnover_rule)
-                    metrics = metrics_for(result)
-                    if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-                        continue
-                    if threshold_rank(metrics) > threshold_rank(best_metrics):
-                        best_long = long_threshold
-                        best_short = short_threshold
-                        best_allow_short = True
-                        best_margin = score_margin
-                        best_min_hold_days = turnover_rule["min_hold_days"]
-                        best_cooldown_days = turnover_rule["cooldown_days"]
-                        best_metrics = metrics
+                for uncertainty_margin in uncertainty_margins:
+                    trade_mask = regime_uncertainty_trade_mask(regime_probability, uncertainty_margin, len(validation))
+                    for turnover_rule in TURNOVER_RULE_CANDIDATES:
+                        result = backtest_from_scores(
+                            validation,
+                            scores,
+                            long_threshold,
+                            short_threshold,
+                            allow_short=True,
+                            score_margin=score_margin,
+                            trade_mask=trade_mask,
+                            no_trade_uncertainty_margin=uncertainty_margin,
+                            **turnover_rule,
+                        )
+                        metrics = add_split_aware_metrics(metrics_for(result), result)
+                        if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                            continue
+                        if threshold_rank(metrics) > threshold_rank(best_metrics):
+                            best_long = long_threshold
+                            best_short = short_threshold
+                            best_allow_short = True
+                            best_margin = score_margin
+                            best_min_hold_days = turnover_rule["min_hold_days"]
+                            best_cooldown_days = turnover_rule["cooldown_days"]
+                            best_uncertainty_margin = uncertainty_margin
+                            best_metrics = metrics
 
     if best_metrics["sharpe_ratio"] == -999.0:
         best_long = float(np.nanquantile(high_volume_scores, 0.80))
-        best_metrics = metrics_for(backtest_from_scores(validation, scores, best_long))
+        fallback_result = backtest_from_scores(validation, scores, best_long)
+        best_metrics = add_split_aware_metrics(metrics_for(fallback_result), fallback_result)
 
+    best_metrics["uncertainty_margin"] = round(float(best_uncertainty_margin), 6)
+    best_metrics["selection_score"] = round(float(selection_score(best_metrics)), 3)
     best_metrics = {f"validation_{key}": value for key, value in best_metrics.items()}
     return (
         float(best_long),
@@ -839,6 +966,7 @@ def select_thresholds(validation: pd.DataFrame, scores: np.ndarray) -> tuple[flo
         float(best_margin),
         int(best_min_hold_days),
         int(best_cooldown_days),
+        float(best_uncertainty_margin),
         best_metrics,
     )
 
@@ -899,24 +1027,16 @@ def fit_model(factory, x: pd.DataFrame, y: pd.Series, model_type: str, fallback_
 
 
 def validation_selection_score(validation_metrics: dict) -> float:
-    sharpe = float(validation_metrics.get("validation_sharpe_ratio", -999.0))
-    total_return = float(validation_metrics.get("validation_total_return_pct", -999.0))
-    max_drawdown = float(validation_metrics.get("validation_max_drawdown_pct", -999.0))
-    cost = float(validation_metrics.get("validation_total_transaction_cost_pct", 999.0))
-    trades = float(validation_metrics.get("validation_trades", 999.0))
-    return (
-        sharpe
-        + total_return * VALIDATION_RETURN_WEIGHT
-        + max_drawdown * VALIDATION_DRAWDOWN_WEIGHT
-        - cost * VALIDATION_COST_PENALTY
-        - trades * VALIDATION_TRADE_PENALTY
-    )
+    return selection_score(validation_metrics, "validation_")
 
 
-def validation_rank(validation_metrics: dict) -> tuple[float, float, float, float, float, int]:
+def validation_rank(validation_metrics: dict) -> tuple[float, float, float, float, int, float, float, float, int]:
     return (
         float(validation_metrics.get("validation_selection_score", validation_selection_score(validation_metrics))),
         float(validation_metrics.get("validation_sharpe_ratio", -999.0)),
+        float(validation_metrics.get("validation_worst_split_sharpe", -999.0)),
+        float(validation_metrics.get("validation_last_split_sharpe", -999.0)),
+        int(validation_metrics.get("validation_positive_split_count", 0)),
         float(validation_metrics.get("validation_total_return_pct", -999.0)),
         float(validation_metrics.get("validation_max_drawdown_pct", -999.0)),
         -float(validation_metrics.get("validation_total_transaction_cost_pct", 999.0)),
@@ -1174,7 +1294,11 @@ def run():
                             candidate.get("fallback_factory"),
                         )
                         validation_scores = predict_signal(validation_model, validation[feature_cols])
-                    long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days, validation_metrics = select_thresholds(validation, validation_scores)
+                    long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days, uncertainty_margin, validation_metrics = select_thresholds(
+                        validation,
+                        validation_scores,
+                        validation_regime_probability if candidate.get("kind") == "regime_ensemble" else None,
+                    )
                     validation_metrics["validation_selection_score"] = round(float(validation_selection_score(validation_metrics)), 3)
                     trial = {
                         "candidate_name": candidate["candidate_name"],
@@ -1186,6 +1310,7 @@ def run():
                         "selected_score_margin": round(float(score_margin), 6),
                         "selected_min_hold_days": int(min_hold_days),
                         "selected_cooldown_days": int(cooldown_days),
+                        "selected_uncertainty_margin": round(float(uncertainty_margin), 6),
                         "strategy_side": "long_short" if allow_short else "long_only",
                         "hyperparameters": safe_json_params(candidate["params"]),
                         "notes": candidate_notes,
@@ -1203,6 +1328,7 @@ def run():
                             "score_margin": score_margin,
                             "min_hold_days": min_hold_days,
                             "cooldown_days": cooldown_days,
+                            "uncertainty_margin": uncertainty_margin,
                         }
                 except Exception as candidate_error:
                     candidate_trials.append({
@@ -1223,6 +1349,7 @@ def run():
             score_margin = float(best_trial["score_margin"])
             min_hold_days = int(best_trial["min_hold_days"])
             cooldown_days = int(best_trial["cooldown_days"])
+            uncertainty_margin = float(best_trial.get("uncertainty_margin", 0.0))
             validation_metrics = {
                 key: value
                 for key, value in best_trial.items()
@@ -1258,7 +1385,23 @@ def run():
                     selected_candidate.get("fallback_factory"),
                 )
                 scores = predict_signal(final_model, test[feature_cols])
-            result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days)
+            test_trade_mask = (
+                regime_uncertainty_trade_mask(test_regime_probability, uncertainty_margin, len(test))
+                if selected_candidate.get("kind") == "regime_ensemble"
+                else None
+            )
+            result = backtest_from_scores(
+                test,
+                scores,
+                long_threshold,
+                short_threshold,
+                allow_short,
+                score_margin,
+                min_hold_days,
+                cooldown_days,
+                trade_mask=test_trade_mask,
+                no_trade_uncertainty_margin=uncertainty_margin,
+            )
             if selected_candidate.get("kind") == "regime_ensemble":
                 result["regime_probability"] = test_regime_probability
                 result["predicted_regime"] = np.where(test_regime_probability >= 0.5, "bull", "bear")
@@ -1276,8 +1419,9 @@ def run():
                 "status": "ok",
                 "message": (
                     f"Engineered features with normalized first-order inputs and re-normalized second-order interactions. "
-                    f"Best of {len(candidates)} candidates selected by turnover-adjusted validation score before the latest two-year test. "
+                    f"Best of {len(candidates)} candidates selected by split-aware turnover-adjusted validation score before the latest two-year test. "
                     f"Regime ensemble candidates first classify recent data into bull/bear regimes, then route to three bull or three bear component models; "
+                    f"uncertain regime probabilities can trigger a no-trade filter; "
                     f"Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
                 ),
                 "backtest_start": str(test["date"].iloc[0]),
@@ -1297,6 +1441,8 @@ def run():
                     "recent_data_regime_classifier",
                     "bull_regime_three_model_ensemble",
                     "bear_regime_three_model_ensemble",
+                    "split_aware_walk_forward_validation",
+                    "regime_uncertainty_no_trade_filter",
                 ],
                 "feature_count": len(feature_cols),
                 "feature_candidate_count": feature_selection["candidate_feature_count"],
@@ -1309,6 +1455,7 @@ def run():
                 "selected_score_margin": round(float(score_margin), 6),
                 "selected_min_hold_days": int(min_hold_days),
                 "selected_cooldown_days": int(cooldown_days),
+                "selected_uncertainty_margin": round(float(uncertainty_margin), 6),
                 "strategy_side": "long_short" if allow_short else "long_only",
                 "selected_candidate": best_trial["candidate_name"],
                 "selected_candidate_index": int(best_trial["candidate_index"]),
@@ -1377,7 +1524,7 @@ def run():
         "sharpe_target": SHARPE_TARGET,
         "transaction_cost_bps": TRANSACTION_COST_BPS,
         "slippage_bps": SLIPPAGE_BPS,
-        "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions, recent-data regime classifier, and bull/bear three-model routed ensembles.",
+        "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions, recent-data regime classifier, bull/bear three-model routed ensembles, split-aware validation, and regime-uncertainty no-trade filtering.",
         "base_feature_count": len(base_features),
         "interaction_source_count": len(interaction_sources),
         "regime_feature_count": len(regime_feature_cols),
