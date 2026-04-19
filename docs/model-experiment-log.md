@@ -298,3 +298,14 @@ This log records each small model experiment so weak runs are not repeated and s
 - Guardrail: Candidate selection remains validation-only. Latest two-year test performance must not be used to choose the candidate or the uncertainty margin.
 - Local validation: Python compile, frontend TypeScript, diff check, and token-string scan passed. Production build is blocked by Windows `spawn EPERM`; Kaggle status/run is blocked because the active environment cannot see `KAGGLE_API_TOKEN`.
 - Full backtest status: Pending Kaggle Experiment 008 run when network/Kaggle access is available.
+
+## 2026-04-19 12:45 KST - Experiment 009 Setup
+
+- User directive: Make a less complex model that treats trade timing as the important target, accounts for noise, and keeps only key variables. A second concurrent Kaggle run is acceptable.
+- Decision: Do not overwrite the still-running Exp8 kernel. Add a separate Kaggle kernel `btc-timing-simple-gpu-backtest` so the timing experiment can run alongside Exp8.
+- Change: Added a simple 3-day timing target. A long timing label requires forward 3-day BTC return to exceed a rolling volatility-based noise floor; a short timing label requires the inverse.
+- Change: Use only first-order features and greedily select up to 48 low-correlation key variables. No second-order interaction pool is used.
+- Change: Train two simple model families only: shallow XGBoost timing heads and shallow ExtraTrees timing heads. Each family trains separate long/short timing classifiers.
+- Change: Validation chooses long threshold, short threshold, edge gap, minimum hold, and cooldown with split-aware scoring before the latest two-year test.
+- Expected effect: Lower overfit risk, fewer trades, and better timing discipline. If it under-trades, the next step should tune the noise floor rather than adding model complexity.
+- Full backtest status: Pending Kaggle Experiment 009 run.
