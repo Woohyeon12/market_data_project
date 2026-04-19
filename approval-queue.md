@@ -23,6 +23,9 @@
 - Done: 2026-04-19 05:20 KST backend and frontend Docker services were rebuilt and restarted. The `/research/model-backtests` API now exposes the imported Experiment 003 Kaggle run with `selected_score_margin`.
 - Done: 2026-04-19 05:38 UTC Kaggle version 9 completed and outputs were downloaded. Experiment 004 ran 10 candidates per model family, but the best candidate worsened to net Sharpe -0.217 with 0/4 positive splits, so it is not a package candidate.
 - Done: 2026-04-19 05:54 UTC Kaggle version 10 completed and outputs were downloaded. Experiment 005 added turnover-adjusted validation scoring, but selected the same winners and kept best net Sharpe at -0.217, so it is not a package candidate.
+- Blocked: 2026-04-19 06:36 KST heartbeat could not check Kaggle version 11 / Experiment 006 because the active automation environment cannot see `KAGGLE_API_TOKEN`. No new model experiment was started, to avoid stacking changes before Exp6 result recovery.
+- Done: 2026-04-19 21:56 UTC Kaggle version 11 completed and outputs were downloaded. Experiment 006 improved best net Sharpe to 0.109 with 3/4 positive splits, but it remains below the Sharpe 2.0 package target.
+- Done: 2026-04-19 21:56 UTC Kaggle token visibility and Git metadata write permission were restored in the active workspace.
 
 ### Pending Approvals
 

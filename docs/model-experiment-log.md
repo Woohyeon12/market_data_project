@@ -217,3 +217,34 @@ This log records each small model experiment so weak runs are not repeated and s
 - UI/API: Add `selected_min_hold_days` and `selected_cooldown_days` to make the chosen turnover rule visible in the Models detail panel.
 - Expected effect: Reduce churn directly, possibly lower transaction cost drag and improve split stability. If the trade path remains poor, the next experiment should target regime filtering rather than more candidate grids.
 - Full backtest status: Pending Kaggle Experiment 006 run.
+
+## 2026-04-19 06:36 KST - Experiment 006 Status Check
+
+- Status check: Blocked in the active heartbeat environment because `KAGGLE_API_TOKEN` is not visible to `scripts/kaggle.cmd`.
+- Decision: Do not start Experiment 007 or modify model logic until Experiment 006 version 11 is checked and outputs are recovered.
+- Safe work completed: Added the blocker to `approval-queue.md`; current best remains Experiment 003 with net Sharpe -0.111 until a newer completed result proves otherwise.
+- Next action: Restore Kaggle token visibility, then check/download version 11 results. If Exp6 is poor or too slow, design Exp7 as a lighter two-stage turnover search or a regime filter rather than adding more candidates.
+
+## 2026-04-19 21:56 UTC - Experiment 006 Result
+
+- Kaggle version: 11.
+- Candidate plan: 10 candidates per model family, turnover-adjusted validation score, explicit min-hold/cooldown turnover rules.
+- Best model: `xgb_gpu_engineered`.
+- Selected candidate: `xgb_gpu_engineered_c03`.
+- Selected validation score: 2.744.
+- Selected turnover rule: minimum hold 3 days, cooldown 1 day.
+- Selected score margin: 0.075.
+- Strategy side: long_short.
+- Net Sharpe: 0.109.
+- Gross Sharpe: 0.303.
+- Net total return: 0.111%.
+- Gross total return: 8.872%.
+- Win rate: 52.14%.
+- Max drawdown: -20.489%.
+- Trades: 84.
+- Total transaction cost: 8.400%.
+- Positive splits: 3/4.
+- Package candidate: false.
+- Read: Explicit turnover control recovered a positive net result and improved split consistency versus Exp4/Exp5. It is also better than Exp3 on net Sharpe, net return, win rate, and positive splits, but still far below the Sharpe 2.0 product target and still has large cost drag and a poor split 3.
+- Next hypothesis: Keep the turnover rule and add a simple regime filter that suppresses trades during high drawdown/negative trend regimes, especially to address split 3. Avoid adding more model candidates until regime filtering is tested.
+- Local deployment check: backend/frontend Docker services were rebuilt and restarted; `/research/model-backtests` now returns `selected_candidate`, `selected_min_hold_days`, and `selected_cooldown_days` for Experiment 006.
