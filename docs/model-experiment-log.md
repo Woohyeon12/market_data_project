@@ -248,3 +248,14 @@ This log records each small model experiment so weak runs are not repeated and s
 - Read: Explicit turnover control recovered a positive net result and improved split consistency versus Exp4/Exp5. It is also better than Exp3 on net Sharpe, net return, win rate, and positive splits, but still far below the Sharpe 2.0 product target and still has large cost drag and a poor split 3.
 - Next hypothesis: Keep the turnover rule and add a simple regime filter that suppresses trades during high drawdown/negative trend regimes, especially to address split 3. Avoid adding more model candidates until regime filtering is tested.
 - Local deployment check: backend/frontend Docker services were rebuilt and restarted; `/research/model-backtests` now returns `selected_candidate`, `selected_min_hold_days`, and `selected_cooldown_days` for Experiment 006.
+
+## 2026-04-19 11:05 KST - Experiment 007 Setup
+
+- User directive: Split the market into rising and falling regimes, predict the recent regime first, then route prediction through regime-matched boosting models. Build 10 candidates where each candidate uses 3 bull-regime components and 3 bear-regime components.
+- Change: Added a recent-data regime label from BTC momentum, trend, drawdown, rolling position, and RSI without using future returns.
+- Change: Added a regime classifier trained on pre-test data, then each ensemble candidate trains separate bull and bear high-volume-candle component models.
+- Change: Each candidate now routes validation/test rows through either a 3-model bull ensemble or a 3-model bear ensemble before the existing validation-selected thresholds, score margin, minimum hold, and cooldown rules are applied.
+- Change: This experiment runs only the new `regime_split_ensemble` group so the result is attributable to the regime-routing architecture rather than the older standalone model families.
+- UI/API: Model results now expose regime feature count, up/down training sample counts, bull/bear component counts, and test-window predicted regime mix.
+- Guardrail: Candidate selection still uses only the validation window and does not select by latest-two-year test performance.
+- Full backtest status: Pending Kaggle Experiment 007 run.

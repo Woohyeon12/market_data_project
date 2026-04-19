@@ -212,6 +212,17 @@ export type KaggleModelResult = {
   selected_feature_count?: number | null;
   feature_selection?: Record<string, number | string | boolean | null>;
   interaction_source_count?: number | null;
+  regime_features?: string[];
+  regime_feature_count?: number | null;
+  regime_up_train_observations?: number | null;
+  regime_down_train_observations?: number | null;
+  bull_train_observations?: number | null;
+  bear_train_observations?: number | null;
+  bull_model_count?: number | null;
+  bear_model_count?: number | null;
+  ensemble_component_count?: number | null;
+  test_regime_up_pct?: number | null;
+  regime_notes?: string[];
   selected_threshold?: number | null;
   selected_short_threshold?: number | null;
   selected_score_margin?: number | null;
@@ -258,6 +269,7 @@ export type KaggleModelRun = {
   feature_engineering?: string | null;
   base_feature_count?: number | null;
   interaction_source_count?: number | null;
+  regime_feature_count?: number | null;
   feature_candidate_count?: number | null;
   selected_feature_count?: number | null;
   final_feature_count?: number | null;

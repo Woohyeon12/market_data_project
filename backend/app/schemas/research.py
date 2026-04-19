@@ -189,6 +189,17 @@ class KaggleModelResult(BaseModel):
     selected_feature_count: int | None = None
     feature_selection: dict[str, float | int | str | bool | None] = {}
     interaction_source_count: int | None = None
+    regime_features: list[str] = []
+    regime_feature_count: int | None = None
+    regime_up_train_observations: int | None = None
+    regime_down_train_observations: int | None = None
+    bull_train_observations: int | None = None
+    bear_train_observations: int | None = None
+    bull_model_count: int | None = None
+    bear_model_count: int | None = None
+    ensemble_component_count: int | None = None
+    test_regime_up_pct: float | None = None
+    regime_notes: list[str] = []
     selected_threshold: float | None = None
     selected_short_threshold: float | None = None
     selected_score_margin: float | None = None
@@ -235,6 +246,7 @@ class KaggleModelRun(BaseModel):
     feature_engineering: str | None = None
     base_feature_count: int | None = None
     interaction_source_count: int | None = None
+    regime_feature_count: int | None = None
     feature_candidate_count: int | None = None
     selected_feature_count: int | None = None
     final_feature_count: int | None = None

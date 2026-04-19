@@ -44,6 +44,7 @@ SLIPPAGE_BPS = 5.0
 MIN_PACKAGE_ACTIVE_OBSERVATIONS = 40
 SCORE_MARGIN_CANDIDATES = [0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1]
 CANDIDATES_PER_MODEL = 10
+RUN_REGIME_ENSEMBLE_ONLY = True
 VALIDATION_RETURN_WEIGHT = 0.015
 VALIDATION_DRAWDOWN_WEIGHT = 0.015
 VALIDATION_COST_PENALTY = 0.08
@@ -59,6 +60,39 @@ TURNOVER_RULE_CANDIDATES = [
     {"min_hold_days": 2, "cooldown_days": 2},
 ]
 EPSILON = 1e-6
+
+REGIME_FEATURE_CANDIDATES = [
+    "btc_return_7d",
+    "btc_return_14d",
+    "btc_return_30d",
+    "btc_return_60d",
+    "btc_rolling_mean_distance_20d",
+    "btc_rolling_mean_distance_60d",
+    "btc_rolling_volatility_20d",
+    "btc_rolling_volatility_30d",
+    "btc_rolling_position_60d",
+    "btc_drawdown_60d",
+    "btc_drawdown_120d",
+    "btc_drawdown_change_60d",
+    "btc_rsi_14",
+    "btc_bollinger_percent_b_20d",
+    "btc_bollinger_width_20d",
+    "btc_trend_above_sma20",
+    "btc_trend_above_sma50",
+    "btc_trend_sma20_above_sma50",
+    "btc_trend_sma50_above_sma200",
+    "btc_trend_strength_20_50",
+    "btc_trend_strength_50_200",
+    "btc_volume_z_30d",
+    "btc_volume_ratio_60d",
+    "sp500_return_20d",
+    "nasdaq_return_20d",
+    "gold_return_20d",
+    "vix_return_20d",
+    "dxy_return_20d",
+    "us10y_bp_chg_30d",
+    "us10y_level_z_120d",
+]
 
 
 def fetch_yahoo_chart(symbol: str) -> pd.DataFrame:
@@ -229,6 +263,17 @@ def add_market_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         add("vix_term_proxy_20d", data["vix_close"] - data["vix_close"].rolling(20).mean())
     if {"dxy_close", "gold_close"}.issubset(data.columns):
         add("dxy_gold_relative_20d", pct_change(data["dxy_close"], 20) - pct_change(data["gold_close"], 20))
+
+    regime_score = pd.Series(0.0, index=data.index)
+    regime_score += (data["btc_return_30d"] > 0).astype(float)
+    regime_score += (data["btc_return_60d"] > 0).astype(float)
+    regime_score += (data["btc_trend_above_sma50"] > 0).astype(float)
+    regime_score += (data["btc_trend_sma20_above_sma50"] > 0).astype(float)
+    regime_score += (data["btc_rolling_position_60d"] > 0.45).astype(float)
+    regime_score += (data["btc_drawdown_120d"] > -25).astype(float)
+    regime_score += (data["btc_rsi_14"] > 45).astype(float)
+    data["market_regime_score"] = regime_score
+    data["market_regime_up"] = (regime_score >= 4).astype(int)
 
     data["high_volume_candle"] = volume >= volume.rolling(252).quantile(HIGH_VOLUME_QUANTILE)
     data["target_return_1d"] = pct_change(close, 1).shift(-1)
@@ -438,6 +483,70 @@ def _model_group(name: str, model_type: str, model_class, configs: list[dict], c
     return {"name": name, "model_type": model_type, "candidates": candidates}
 
 
+def _regime_classifier_params(index: int) -> dict:
+    depth_cycle = [3, 4, 5, 6, None]
+    return {
+        "n_estimators": 180 + index * 30,
+        "max_depth": depth_cycle[(index - 1) % len(depth_cycle)],
+        "min_samples_leaf": 8 + ((index - 1) % 4) * 2,
+        "min_samples_split": 16 + ((index - 1) % 3) * 4,
+        "max_features": [0.45, 0.55, 0.65, 0.75, "sqrt"][(index - 1) % 5],
+        "bootstrap": index % 2 == 0,
+        "random_state": 9100 + index,
+        "n_jobs": -1,
+    }
+
+
+def _regime_component(group: dict, candidate_index: int) -> dict:
+    component = group["candidates"][candidate_index - 1]
+    return {
+        "family": group["name"],
+        "model_type": group["model_type"],
+        "candidate_name": component["candidate_name"],
+        "candidate_index": component["candidate_index"],
+        "params": component["params"],
+        "factory": component["factory"],
+        "fallback_factory": component.get("fallback_factory"),
+    }
+
+
+def _regime_ensemble_group(base_groups: list[dict]) -> dict:
+    candidates = []
+    usable_groups = [group for group in base_groups if len(group.get("candidates", [])) >= CANDIDATES_PER_MODEL]
+    for index in range(1, CANDIDATES_PER_MODEL + 1):
+        components = [_regime_component(group, index) for group in usable_groups]
+        component_summary = [
+            {
+                "family": component["family"],
+                "candidate_name": component["candidate_name"],
+                "candidate_index": component["candidate_index"],
+                "params": component["params"],
+            }
+            for component in components
+        ]
+        candidates.append({
+            "kind": "regime_ensemble",
+            "candidate_name": f"regime_split_ensemble_c{index:02d}",
+            "candidate_index": index,
+            "regime_classifier_params": _regime_classifier_params(index),
+            "bull_components": components,
+            "bear_components": components,
+            "params": {
+                "regime_classifier": _regime_classifier_params(index),
+                "bull_component_count": len(components),
+                "bear_component_count": len(components),
+                "bull_components": component_summary,
+                "bear_components": component_summary,
+                "selection_rule": "A recent-data regime classifier chooses the bull or bear 3-model ensemble before threshold/backtest selection.",
+            },
+        })
+    return {
+        "name": "regime_split_ensemble",
+        "model_type": "regime_classifier_plus_3_bull_3_bear_boosting_ensemble",
+        "candidates": candidates,
+    }
+
+
 def _lgbm_cpu_params(params: dict) -> dict:
     cpu_params = dict(params)
     cpu_params.pop("device", None)
@@ -512,6 +621,10 @@ def model_specs():
         {"n_estimators": 620, "max_depth": None, "min_samples_leaf": 12, "min_samples_split": 28, "max_features": 0.36, "bootstrap": True, "random_state": 1910, "n_jobs": -1},
     ]
     groups.append(_model_group("extra_trees_engineered", "extra_trees_classifier", ExtraTreesClassifier, extra_configs))
+    regime_group = _regime_ensemble_group(groups)
+    if RUN_REGIME_ENSEMBLE_ONLY:
+        return [regime_group]
+    groups.append(regime_group)
     return groups
 
 
@@ -811,6 +924,162 @@ def validation_rank(validation_metrics: dict) -> tuple[float, float, float, floa
     )
 
 
+def available_regime_features(frame: pd.DataFrame) -> list[str]:
+    return [column for column in REGIME_FEATURE_CANDIDATES if column in frame.columns]
+
+
+def _fit_component_models(
+    label: str,
+    components: list[dict],
+    regime_train: pd.DataFrame,
+    fallback_train: pd.DataFrame,
+    feature_cols: list[str],
+) -> tuple[list[dict], list[str]]:
+    fitted = []
+    notes = []
+    for component in components:
+        train_sample = regime_train
+        used_fallback = False
+        if len(train_sample) < MIN_VALIDATION_TRADES or train_sample["target_up"].nunique() < 2:
+            train_sample = fallback_train
+            used_fallback = True
+            notes.append(f"{label}:{component['candidate_name']} used full high-volume fallback because the regime sample was too small or one-sided.")
+        if len(train_sample) < MIN_VALIDATION_TRADES or train_sample["target_up"].nunique() < 2:
+            raise RuntimeError(f"{label} component {component['candidate_name']} has insufficient target diversity.")
+
+        model, fitted_type = fit_model(
+            component["factory"],
+            train_sample[feature_cols],
+            train_sample["target_up"],
+            component["model_type"],
+            component.get("fallback_factory"),
+        )
+        fitted.append({
+            "label": label,
+            "family": component["family"],
+            "candidate_name": component["candidate_name"],
+            "candidate_index": component["candidate_index"],
+            "model_type": fitted_type,
+            "model": model,
+            "train_observations": int(len(train_sample)),
+            "used_fallback": used_fallback,
+        })
+    return fitted, notes
+
+
+def fit_regime_ensemble_candidate(
+    candidate: dict,
+    all_train: pd.DataFrame,
+    high_volume_train: pd.DataFrame,
+    feature_cols: list[str],
+    regime_feature_cols: list[str],
+) -> dict:
+    from sklearn.ensemble import ExtraTreesClassifier
+
+    if len(regime_feature_cols) < 4:
+        raise RuntimeError("Regime ensemble needs at least four recent-data regime features.")
+    if "market_regime_up" not in all_train:
+        raise RuntimeError("market_regime_up labels are missing from the training frame.")
+
+    regime_x = all_train[regime_feature_cols].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    regime_y = all_train["market_regime_up"].astype(int)
+    static_regime = int(regime_y.mode().iloc[0]) if len(regime_y) else 1
+    regime_model = None
+    if regime_y.nunique() >= 2:
+        regime_model = ExtraTreesClassifier(**candidate["regime_classifier_params"])
+        regime_model.fit(regime_x, regime_y)
+
+    bull_train = high_volume_train[high_volume_train["market_regime_up"] == 1].copy()
+    bear_train = high_volume_train[high_volume_train["market_regime_up"] == 0].copy()
+    bull_models, bull_notes = _fit_component_models(
+        "bull",
+        candidate["bull_components"],
+        bull_train,
+        high_volume_train,
+        feature_cols,
+    )
+    bear_models, bear_notes = _fit_component_models(
+        "bear",
+        candidate["bear_components"],
+        bear_train,
+        high_volume_train,
+        feature_cols,
+    )
+    return {
+        "kind": "regime_ensemble",
+        "candidate_name": candidate["candidate_name"],
+        "candidate_index": candidate["candidate_index"],
+        "regime_model": regime_model,
+        "static_regime": static_regime,
+        "bull_models": bull_models,
+        "bear_models": bear_models,
+        "notes": bull_notes + bear_notes,
+        "metadata": {
+            "regime_feature_count": int(len(regime_feature_cols)),
+            "regime_up_train_observations": int((all_train["market_regime_up"] == 1).sum()),
+            "regime_down_train_observations": int((all_train["market_regime_up"] == 0).sum()),
+            "bull_train_observations": int(len(bull_train)),
+            "bear_train_observations": int(len(bear_train)),
+            "bull_model_count": int(len(bull_models)),
+            "bear_model_count": int(len(bear_models)),
+            "ensemble_component_count": int(len(bull_models) + len(bear_models)),
+            "regime_classifier": "extra_trees_classifier" if regime_model is not None else "static_majority_regime",
+            "component_model_types": sorted({row["model_type"] for row in bull_models + bear_models}),
+        },
+    }
+
+
+def _average_component_scores(models: list[dict], frame: pd.DataFrame, feature_cols: list[str]) -> np.ndarray:
+    if not models:
+        raise RuntimeError("Regime ensemble has no fitted component models.")
+    scores = [predict_signal(row["model"], frame[feature_cols]) for row in models]
+    return np.nanmean(np.vstack(scores), axis=0)
+
+
+def predict_regime_ensemble(ensemble: dict, frame: pd.DataFrame, feature_cols: list[str], regime_feature_cols: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    if ensemble["regime_model"] is not None:
+        regime_x = frame[regime_feature_cols].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        regime_probability = predict_signal(ensemble["regime_model"], regime_x)
+    else:
+        regime_probability = np.full(len(frame), float(ensemble["static_regime"]), dtype=float)
+
+    bull_scores = _average_component_scores(ensemble["bull_models"], frame, feature_cols)
+    bear_scores = _average_component_scores(ensemble["bear_models"], frame, feature_cols)
+    use_bull = regime_probability >= 0.5
+    scores = np.where(use_bull, bull_scores, bear_scores)
+    return np.asarray(scores, dtype=float), np.asarray(regime_probability, dtype=float)
+
+
+def ensemble_feature_importance(
+    ensemble: dict,
+    feature_cols: list[str],
+    train_signal_frame: pd.DataFrame,
+    train_regime_frame: pd.DataFrame,
+    regime_feature_cols: list[str],
+) -> list[dict]:
+    totals: dict[str, float] = {}
+    component_models = ensemble["bull_models"] + ensemble["bear_models"]
+    for component in component_models:
+        for item in feature_importance(component["model"], feature_cols, train_signal_frame[feature_cols], train_signal_frame["target_up"]):
+            totals[item["feature"]] = totals.get(item["feature"], 0.0) + float(item["importance"])
+
+    if ensemble["regime_model"] is not None:
+        regime_importance = feature_importance(
+            ensemble["regime_model"],
+            regime_feature_cols,
+            train_regime_frame[regime_feature_cols],
+            train_regime_frame["market_regime_up"],
+        )
+        for item in regime_importance:
+            totals[item["feature"]] = totals.get(item["feature"], 0.0) + float(item["importance"])
+
+    total = sum(totals.values()) or 1.0
+    return [
+        {"feature": feature, "importance": round(float(value / total), 6)}
+        for feature, value in sorted(totals.items(), key=lambda item: item[1], reverse=True)
+    ]
+
+
 def safe_json_params(params: dict) -> dict:
     clean = {}
     for key, value in params.items():
@@ -829,9 +1098,10 @@ def run():
     test_start_index = len(data) - TRAIN_END_OFFSET
     validation_start_index = test_start_index - VALIDATION_OFFSET
     feature_matrix, feature_cols, interaction_sources, feature_selection = build_model_matrices(data, base_features, test_start_index)
+    regime_feature_cols = available_regime_features(data)
     model_frame = pd.concat(
         [
-            data[["date", "target_return_1d", "target_up", "high_volume_candle"]].reset_index(drop=True),
+            data[["date", "target_return_1d", "target_up", "high_volume_candle", "market_regime_up", "market_regime_score", *regime_feature_cols]].reset_index(drop=True),
             feature_matrix.reset_index(drop=True),
         ],
         axis=1,
@@ -856,6 +1126,7 @@ def run():
         "interaction_sources": len(interaction_sources),
         "candidate_features": feature_selection["candidate_feature_count"],
         "final_features": len(feature_cols),
+        "regime_features": len(regime_feature_cols),
         "feature_selection": feature_selection,
         "models": [group["name"] for group in model_groups],
         "candidates_per_model": CANDIDATES_PER_MODEL,
@@ -874,14 +1145,35 @@ def run():
             for candidate in candidates:
                 try:
                     print(f"Running candidate: {candidate['candidate_name']}")
-                    validation_model, validation_model_type = fit_model(
-                        candidate["factory"],
-                        fit_high_volume[feature_cols],
-                        fit_high_volume["target_up"],
-                        model_type,
-                        candidate.get("fallback_factory"),
-                    )
-                    validation_scores = predict_signal(validation_model, validation[feature_cols])
+                    candidate_metadata = {}
+                    candidate_notes = []
+                    if candidate.get("kind") == "regime_ensemble":
+                        validation_model = fit_regime_ensemble_candidate(
+                            candidate,
+                            fit_frame,
+                            fit_high_volume,
+                            feature_cols,
+                            regime_feature_cols,
+                        )
+                        validation_model_type = model_type
+                        validation_scores, validation_regime_probability = predict_regime_ensemble(
+                            validation_model,
+                            validation,
+                            feature_cols,
+                            regime_feature_cols,
+                        )
+                        candidate_metadata = validation_model["metadata"]
+                        candidate_metadata["validation_regime_up_pct"] = round(float((validation_regime_probability >= 0.5).mean() * 100), 2)
+                        candidate_notes = validation_model["notes"]
+                    else:
+                        validation_model, validation_model_type = fit_model(
+                            candidate["factory"],
+                            fit_high_volume[feature_cols],
+                            fit_high_volume["target_up"],
+                            model_type,
+                            candidate.get("fallback_factory"),
+                        )
+                        validation_scores = predict_signal(validation_model, validation[feature_cols])
                     long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days, validation_metrics = select_thresholds(validation, validation_scores)
                     validation_metrics["validation_selection_score"] = round(float(validation_selection_score(validation_metrics)), 3)
                     trial = {
@@ -896,6 +1188,8 @@ def run():
                         "selected_cooldown_days": int(cooldown_days),
                         "strategy_side": "long_short" if allow_short else "long_only",
                         "hyperparameters": safe_json_params(candidate["params"]),
+                        "notes": candidate_notes,
+                        **candidate_metadata,
                         **validation_metrics,
                     }
                     candidate_trials.append(trial)
@@ -935,17 +1229,44 @@ def run():
                 if key.startswith("validation_")
             }
 
-            final_model, final_model_type = fit_model(
-                selected_candidate["factory"],
-                train_full_high_volume[feature_cols],
-                train_full_high_volume["target_up"],
-                best_trial["model_type"],
-                selected_candidate.get("fallback_factory"),
-            )
-            scores = predict_signal(final_model, test[feature_cols])
+            final_metadata = {}
+            final_notes = []
+            if selected_candidate.get("kind") == "regime_ensemble":
+                final_model = fit_regime_ensemble_candidate(
+                    selected_candidate,
+                    train_full,
+                    train_full_high_volume,
+                    feature_cols,
+                    regime_feature_cols,
+                )
+                final_model_type = model_type
+                scores, test_regime_probability = predict_regime_ensemble(
+                    final_model,
+                    test,
+                    feature_cols,
+                    regime_feature_cols,
+                )
+                final_metadata = final_model["metadata"]
+                final_metadata["test_regime_up_pct"] = round(float((test_regime_probability >= 0.5).mean() * 100), 2)
+                final_notes = final_model["notes"]
+            else:
+                final_model, final_model_type = fit_model(
+                    selected_candidate["factory"],
+                    train_full_high_volume[feature_cols],
+                    train_full_high_volume["target_up"],
+                    best_trial["model_type"],
+                    selected_candidate.get("fallback_factory"),
+                )
+                scores = predict_signal(final_model, test[feature_cols])
             result = backtest_from_scores(test, scores, long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days)
+            if selected_candidate.get("kind") == "regime_ensemble":
+                result["regime_probability"] = test_regime_probability
+                result["predicted_regime"] = np.where(test_regime_probability >= 0.5, "bull", "bear")
             metrics = metrics_for(result)
-            importances = feature_importance(final_model, feature_cols, train_full_high_volume[feature_cols], train_full_high_volume["target_up"])
+            if selected_candidate.get("kind") == "regime_ensemble":
+                importances = ensemble_feature_importance(final_model, feature_cols, train_full_high_volume, train_full, regime_feature_cols)
+            else:
+                importances = feature_importance(final_model, feature_cols, train_full_high_volume[feature_cols], train_full_high_volume["target_up"])
             split_metrics, correlations = split_analysis(name, result, test, feature_cols, importances)
             target_met = metrics["sharpe_ratio"] >= SHARPE_TARGET
             gate = package_gate(metrics, split_metrics, validation_metrics)
@@ -955,7 +1276,8 @@ def run():
                 "status": "ok",
                 "message": (
                     f"Engineered features with normalized first-order inputs and re-normalized second-order interactions. "
-                    f"Best of {len(candidates)} candidates selected by turnover-adjusted validation score before the latest two-year test; "
+                    f"Best of {len(candidates)} candidates selected by turnover-adjusted validation score before the latest two-year test. "
+                    f"Regime ensemble candidates first classify recent data into bull/bear regimes, then route to three bull or three bear component models; "
                     f"Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
                 ),
                 "backtest_start": str(test["date"].iloc[0]),
@@ -972,12 +1294,16 @@ def run():
                     "bollinger_bands",
                     "golden_cross",
                     "normalized_second_order_arithmetic",
+                    "recent_data_regime_classifier",
+                    "bull_regime_three_model_ensemble",
+                    "bear_regime_three_model_ensemble",
                 ],
                 "feature_count": len(feature_cols),
                 "feature_candidate_count": feature_selection["candidate_feature_count"],
                 "selected_feature_count": feature_selection["selected_feature_count"],
                 "feature_selection": feature_selection,
                 "interaction_source_count": len(interaction_sources),
+                "regime_features": regime_feature_cols,
                 "selected_threshold": round(float(long_threshold), 6),
                 "selected_short_threshold": round(float(short_threshold), 6) if short_threshold is not None else None,
                 "selected_score_margin": round(float(score_margin), 6),
@@ -990,8 +1316,10 @@ def run():
                 "selected_validation_score": best_trial.get("validation_selection_score"),
                 "selected_hyperparameters": safe_json_params(selected_candidate["params"]),
                 "candidate_trials": sorted(candidate_trials, key=validation_rank, reverse=True),
+                "regime_notes": final_notes,
                 "sharpe_target": SHARPE_TARGET,
                 "target_met": target_met,
+                **final_metadata,
                 **gate,
                 **validation_metrics,
                 **metrics,
@@ -1049,9 +1377,10 @@ def run():
         "sharpe_target": SHARPE_TARGET,
         "transaction_cost_bps": TRANSACTION_COST_BPS,
         "slippage_bps": SLIPPAGE_BPS,
-        "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions.",
+        "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions, recent-data regime classifier, and bull/bear three-model routed ensembles.",
         "base_feature_count": len(base_features),
         "interaction_source_count": len(interaction_sources),
+        "regime_feature_count": len(regime_feature_cols),
         "feature_candidate_count": feature_selection["candidate_feature_count"],
         "selected_feature_count": feature_selection["selected_feature_count"],
         "final_feature_count": len(feature_cols),

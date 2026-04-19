@@ -555,6 +555,15 @@ type ShowcaseModel = {
   selectedBaseFeatureCount?: number | null;
   selectedInteractionFeatureCount?: number | null;
   selectedBaseFloorMet?: boolean | null;
+  regimeFeatureCount?: number | null;
+  regimeUpTrainObservations?: number | null;
+  regimeDownTrainObservations?: number | null;
+  bullTrainObservations?: number | null;
+  bearTrainObservations?: number | null;
+  bullModelCount?: number | null;
+  bearModelCount?: number | null;
+  ensembleComponentCount?: number | null;
+  testRegimeUpPct?: number | null;
   selectedThreshold?: number | null;
   selectedShortThreshold?: number | null;
   selectedScoreMargin?: number | null;
@@ -811,6 +820,15 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     selectedBaseFeatureCount: featureSelectionNumber(model.feature_selection, "selected_base_feature_count"),
     selectedInteractionFeatureCount: featureSelectionNumber(model.feature_selection, "selected_interaction_feature_count"),
     selectedBaseFloorMet: featureSelectionBoolean(model.feature_selection, "selected_base_floor_met"),
+    regimeFeatureCount: model.regime_feature_count,
+    regimeUpTrainObservations: model.regime_up_train_observations,
+    regimeDownTrainObservations: model.regime_down_train_observations,
+    bullTrainObservations: model.bull_train_observations,
+    bearTrainObservations: model.bear_train_observations,
+    bullModelCount: model.bull_model_count,
+    bearModelCount: model.bear_model_count,
+    ensembleComponentCount: model.ensemble_component_count,
+    testRegimeUpPct: model.test_regime_up_pct,
     selectedThreshold: model.selected_threshold,
     selectedShortThreshold: model.selected_short_threshold,
     selectedScoreMargin: model.selected_score_margin,
@@ -1725,6 +1743,42 @@ export function ResearchDashboard() {
                         : selectedModel.selectedBaseFloorMet
                           ? "met"
                           : "missed"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Regime features</span>
+                    <strong>{selectedModel.regimeFeatureCount?.toLocaleString() ?? "n/a"}</strong>
+                  </div>
+                  <div>
+                    <span>Bull / bear models</span>
+                    <strong>
+                      {selectedModel.bullModelCount !== null && selectedModel.bullModelCount !== undefined
+                        ? selectedModel.bullModelCount.toLocaleString()
+                        : "n/a"}
+                      {" / "}
+                      {selectedModel.bearModelCount !== null && selectedModel.bearModelCount !== undefined
+                        ? selectedModel.bearModelCount.toLocaleString()
+                        : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Regime train split</span>
+                    <strong>
+                      {selectedModel.regimeUpTrainObservations !== null && selectedModel.regimeUpTrainObservations !== undefined
+                        ? selectedModel.regimeUpTrainObservations.toLocaleString()
+                        : "n/a"}
+                      {" up / "}
+                      {selectedModel.regimeDownTrainObservations !== null && selectedModel.regimeDownTrainObservations !== undefined
+                        ? selectedModel.regimeDownTrainObservations.toLocaleString()
+                        : "n/a"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Test regime mix</span>
+                    <strong>
+                      {selectedModel.testRegimeUpPct !== null && selectedModel.testRegimeUpPct !== undefined
+                        ? `${selectedModel.testRegimeUpPct.toFixed(1)}% up`
+                        : "n/a"}
                     </strong>
                   </div>
                   <div>
