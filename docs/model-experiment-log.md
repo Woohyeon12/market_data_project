@@ -259,3 +259,30 @@ This log records each small model experiment so weak runs are not repeated and s
 - UI/API: Model results now expose regime feature count, up/down training sample counts, bull/bear component counts, and test-window predicted regime mix.
 - Guardrail: Candidate selection still uses only the validation window and does not select by latest-two-year test performance.
 - Full backtest status: Pending Kaggle Experiment 007 run.
+
+## 2026-04-19 02:30 UTC - Experiment 007 Result
+
+- Kaggle version: 12.
+- Candidate plan: 10 regime-routed ensemble candidates; each candidate trains a recent-data regime classifier plus 3 bull-regime and 3 bear-regime component models.
+- Selected features: 360.
+- Regime features: 30.
+- Best model: `regime_split_ensemble`.
+- Selected candidate: `regime_split_ensemble_c07`.
+- Selected validation score: 1.730.
+- Selected turnover rule: minimum hold 1 day, cooldown 1 day.
+- Selected score margin: 0.020.
+- Strategy side: long_only.
+- Test predicted regime mix: 48.61% up.
+- Net Sharpe: -0.103.
+- Gross Sharpe: 0.112.
+- Net total return: -7.095%.
+- Gross total return: 0.646%.
+- Win rate: 50.77%.
+- Max drawdown: -26.977%.
+- Trades: 80.
+- Total transaction cost: 8.000%.
+- Positive splits: 3/4.
+- Package candidate: false.
+- Read: The requested bull/bear routed ensemble ran correctly and reduced trades slightly versus Exp6, but it worsened net Sharpe from 0.109 to -0.103 and collapsed in split 4. The validation winner had strong validation Sharpe, so the failure is likely validation/test regime decay rather than an implementation-only issue.
+- Next hypothesis: Keep the regime architecture but make selection more robust by using split-aware validation or walk-forward validation, penalizing last-validation-window decay, and adding a no-trade kill switch when the predicted regime probability is uncertain.
+- Local deployment check: backend/frontend Docker services were rebuilt and restarted; `/research/model-backtests` returns `regime_feature_count`, bull/bear component counts, and predicted test regime mix for Experiment 007.
