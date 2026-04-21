@@ -1,5 +1,6 @@
 import json
 import math
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -1520,11 +1521,16 @@ def run():
                             "uncertainty_margin": uncertainty_margin,
                         }
                 except Exception as candidate_error:
+                    print(
+                        f"[volume-candidate-error] {name}/{candidate['candidate_name']} failed: "
+                        f"{type(candidate_error).__name__}: {candidate_error}"
+                    )
+                    print(traceback.format_exc())
                     candidate_trials.append({
                         "candidate_name": candidate["candidate_name"],
                         "candidate_index": candidate["candidate_index"],
                         "status": "error",
-                        "message": str(candidate_error),
+                        "message": f"{type(candidate_error).__name__}: {candidate_error}",
                         "hyperparameters": safe_json_params(candidate["params"]),
                     })
 
@@ -1685,11 +1691,13 @@ def run():
             feature_rows.extend({"model_name": name, **item} for item in importances)
             prediction_frames.append(result.assign(model_name=name))
         except Exception as error:
+            print(f"[volume-group-error] {name} failed: {type(error).__name__}: {error}")
+            print(traceback.format_exc())
             model_rows.append({
                 "name": name,
                 "model_type": model_type,
                 "status": "error",
-                "message": str(error),
+                "message": f"{type(error).__name__}: {error}",
                 "sharpe_ratio": 0,
                 "win_rate_pct": 0,
                 "total_return_pct": 0,

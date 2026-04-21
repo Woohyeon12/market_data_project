@@ -1,5 +1,6 @@
 import json
 import math
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -902,11 +903,13 @@ def run() -> None:
             feature_rows.extend({"model_name": spec["name"], **item} for item in importances)
             prediction_frames.append(result.assign(model_name=spec["name"]))
         except Exception as error:
+            print(f"[timing-error] {spec['name']} failed: {type(error).__name__}: {error}")
+            print(traceback.format_exc())
             model_rows.append({
                 "name": spec["name"],
                 "model_type": spec["model_type"],
                 "status": "error",
-                "message": str(error),
+                "message": f"{type(error).__name__}: {error}",
                 "sharpe_ratio": 0.0,
                 "win_rate_pct": 0.0,
                 "total_return_pct": 0.0,
