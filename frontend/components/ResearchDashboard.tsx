@@ -569,6 +569,7 @@ type ShowcaseModel = {
   selectedScoreMargin?: number | null;
   selectedMinHoldDays?: number | null;
   selectedCooldownDays?: number | null;
+  selectedStopLossPct?: number | null;
   selectedUncertaintyMargin?: number | null;
   strategySide?: string | null;
   selectedCandidate?: string | null;
@@ -582,6 +583,8 @@ type ShowcaseModel = {
   validationSplitCount?: number | null;
   validationRecentDecayPenalty?: number | null;
   uncertaintySuppressedPct?: number | null;
+  stopLossExitCount?: number | null;
+  stopLossTriggerRatePct?: number | null;
   sharpeTarget?: number | null;
   targetMet?: boolean | null;
   packageCandidate?: boolean | null;
@@ -593,6 +596,18 @@ type ShowcaseModel = {
   readinessTone: "ready" | "watch" | "hold";
   readinessReasons: string[];
   equityCurve: ModelEquityPoint[];
+};
+
+type ShowcaseSectionItem = {
+  label: string;
+  value: string;
+  valueClassName?: string;
+};
+
+type ShowcaseSection = {
+  title: string;
+  subtitle: string;
+  items: ShowcaseSectionItem[];
 };
 
 function stabilityLabel(score: number) {
@@ -841,6 +856,7 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     selectedScoreMargin: model.selected_score_margin,
     selectedMinHoldDays: model.selected_min_hold_days,
     selectedCooldownDays: model.selected_cooldown_days,
+    selectedStopLossPct: model.selected_stop_loss_pct,
     selectedUncertaintyMargin: model.selected_uncertainty_margin,
     strategySide: model.strategy_side,
     selectedCandidate: model.selected_candidate,
@@ -854,6 +870,8 @@ function fromKaggleModel(run: KaggleModelRun, model: KaggleModelResult): Showcas
     validationSplitCount: model.validation_split_count,
     validationRecentDecayPenalty: model.validation_recent_decay_penalty,
     uncertaintySuppressedPct: model.uncertainty_suppressed_pct,
+    stopLossExitCount: model.stop_loss_exit_count,
+    stopLossTriggerRatePct: model.stop_loss_trigger_rate_pct,
     sharpeTarget: model.sharpe_target,
     targetMet: model.target_met,
     packageCandidate: model.package_candidate,
@@ -1055,6 +1073,273 @@ export function ResearchDashboard() {
     : null;
   const comparisonModels = showcaseModels.length
     ? [0, 1, 2, 3].map((offset) => showcaseModels[(selectedModelIndex + offset) % showcaseModels.length])
+    : [];
+  const selectedModelCurve = selectedModel?.equityCurve.length
+    ? modelCurveGeometry(selectedModel.equityCurve)
+    : null;
+  const selectedModelMetaPills = selectedModel
+    ? [
+      {
+        label: "Selected candidate",
+        value: selectedModel.selectedCandidate
+          ? `${selectedModel.selectedCandidate}${selectedModel.candidateCount ? ` / best of ${selectedModel.candidateCount}` : ""}`
+          : selectedModel.candidateCount
+            ? `best of ${selectedModel.candidateCount}`
+            : "single model",
+        accent: true,
+      },
+      {
+        label: "Strategy",
+        value: selectedModel.strategySide ?? "long_only",
+      },
+      {
+        label: "Stop floor",
+        value:
+          selectedModel.selectedStopLossPct !== null &&
+          selectedModel.selectedStopLossPct !== undefined &&
+          selectedModel.selectedStopLossPct > 0
+            ? `${selectedModel.selectedStopLossPct.toFixed(1)}% close stop`
+            : "off",
+      },
+      {
+        label: "Imported",
+        value: formatShortDateTime(selectedModel.createdAt),
+      },
+    ]
+    : [];
+  const selectedModelSections: ShowcaseSection[] = selectedModel
+    ? [
+      {
+        title: "Performance",
+        subtitle: "Net path, gross edge, and realized stability",
+        items: [
+          {
+            label: "Backtest window",
+            value: `${selectedModel.backtestStart ?? "n/a"} to ${selectedModel.backtestEnd ?? "n/a"}`,
+          },
+          {
+            label: "Gross total",
+            value:
+              selectedModel.grossTotalReturnPct !== null && selectedModel.grossTotalReturnPct !== undefined
+                ? formatPercent(selectedModel.grossTotalReturnPct)
+                : "n/a",
+            valueClassName:
+              selectedModel.grossTotalReturnPct !== null &&
+              selectedModel.grossTotalReturnPct !== undefined &&
+              selectedModel.grossTotalReturnPct >= 0
+                ? "change-positive"
+                : selectedModel.grossTotalReturnPct !== null && selectedModel.grossTotalReturnPct !== undefined
+                  ? "change-negative"
+                  : undefined,
+          },
+          {
+            label: "Gross Sharpe",
+            value:
+              selectedModel.grossSharpeRatio !== null && selectedModel.grossSharpeRatio !== undefined
+                ? selectedModel.grossSharpeRatio.toFixed(2)
+                : "n/a",
+          },
+          {
+            label: "Since model start",
+            value: formatPercent(selectedModel.returnSinceStartPct),
+            valueClassName: selectedModel.returnSinceStartPct >= 0 ? "change-positive" : "change-negative",
+          },
+          {
+            label: "Split return volatility",
+            value: `${selectedModel.splitReturnStd.toFixed(2)}%`,
+          },
+          {
+            label: "Worst split Sharpe",
+            value:
+              selectedModel.worstSplitSharpe !== null && selectedModel.worstSplitSharpe !== undefined
+                ? selectedModel.worstSplitSharpe.toFixed(2)
+                : "n/a",
+          },
+        ],
+      },
+      {
+        title: "Validation",
+        subtitle: "Why this candidate survived selection",
+        items: [
+          {
+            label: "Sharpe target",
+            value: selectedModel.sharpeTarget ? selectedModel.sharpeTarget.toFixed(1) : "n/a",
+            valueClassName: selectedModel.targetMet ? "change-positive" : "change-negative",
+          },
+          {
+            label: "Validation score",
+            value:
+              selectedModel.selectedValidationScore !== null && selectedModel.selectedValidationScore !== undefined
+                ? selectedModel.selectedValidationScore.toFixed(3)
+                : "n/a",
+          },
+          {
+            label: "Validation Sharpe",
+            value:
+              selectedModel.validationSharpeRatio !== null && selectedModel.validationSharpeRatio !== undefined
+                ? selectedModel.validationSharpeRatio.toFixed(2)
+                : "n/a",
+          },
+          {
+            label: "Validation floor",
+            value:
+              selectedModel.validationWorstSplitSharpe !== null && selectedModel.validationWorstSplitSharpe !== undefined
+                ? `${selectedModel.validationWorstSplitSharpe.toFixed(2)} worst`
+                : "n/a",
+          },
+          {
+            label: "Recent validation",
+            value:
+              selectedModel.validationLastSplitSharpe !== null && selectedModel.validationLastSplitSharpe !== undefined
+                ? `${selectedModel.validationLastSplitSharpe.toFixed(2)} last`
+                : "n/a",
+          },
+          {
+            label: "Validation decay",
+            value:
+              selectedModel.validationRecentDecayPenalty !== null &&
+              selectedModel.validationRecentDecayPenalty !== undefined
+                ? selectedModel.validationRecentDecayPenalty.toFixed(2)
+                : "n/a",
+          },
+        ],
+      },
+      {
+        title: "Execution & Risk",
+        subtitle: "Turnover, cost drag, and protective exits",
+        items: [
+          {
+            label: "Exposure",
+            value: `${selectedModel.exposurePct.toFixed(1)}%`,
+          },
+          {
+            label: "Position changes",
+            value: selectedModel.trades.toLocaleString(),
+          },
+          {
+            label: "Cost drag",
+            value:
+              selectedModel.totalTransactionCostPct !== null && selectedModel.totalTransactionCostPct !== undefined
+                ? `${selectedModel.totalTransactionCostPct.toFixed(2)}%`
+                : "n/a",
+          },
+          {
+            label: "Turnover rule",
+            value:
+              selectedModel.selectedMinHoldDays !== null ||
+              selectedModel.selectedCooldownDays !== null
+                ? `hold ${selectedModel.selectedMinHoldDays ?? 1}d / cool ${selectedModel.selectedCooldownDays ?? 0}d`
+                : "none",
+          },
+          {
+            label: "No-trade filter",
+            value:
+              selectedModel.selectedUncertaintyMargin !== null &&
+              selectedModel.selectedUncertaintyMargin !== undefined &&
+              selectedModel.selectedUncertaintyMargin > 0
+                ? `${selectedModel.selectedUncertaintyMargin.toFixed(3)} margin`
+                : "off",
+          },
+          {
+            label: "Filtered test days",
+            value:
+              selectedModel.uncertaintySuppressedPct !== null && selectedModel.uncertaintySuppressedPct !== undefined
+                ? `${selectedModel.uncertaintySuppressedPct.toFixed(1)}%`
+                : "n/a",
+          },
+          {
+            label: "Stop floor",
+            value:
+              selectedModel.selectedStopLossPct !== null &&
+              selectedModel.selectedStopLossPct !== undefined &&
+              selectedModel.selectedStopLossPct > 0
+                ? `${selectedModel.selectedStopLossPct.toFixed(1)}%`
+                : "off",
+          },
+          {
+            label: "Stop exits",
+            value:
+              selectedModel.stopLossExitCount !== null && selectedModel.stopLossExitCount !== undefined
+                ? `${selectedModel.stopLossExitCount.toLocaleString()} / ${selectedModel.stopLossTriggerRatePct?.toFixed(1) ?? "0.0"}%`
+                : "n/a",
+          },
+        ],
+      },
+      {
+        title: "Feature & Regime",
+        subtitle: "Coverage, routing, and input footprint",
+        items: [
+          {
+            label: "Active observations",
+            value: `${selectedModel.activeObservations.toLocaleString()} / ${selectedModel.observations.toLocaleString()}`,
+          },
+          {
+            label: "Feature count",
+            value: (
+              selectedModel.selectedFeatureCount ??
+              selectedModel.featureCount ??
+              selectedModel.features.length
+            ).toLocaleString(),
+          },
+          {
+            label: "Candidate pool",
+            value: selectedModel.featureCandidateCount?.toLocaleString() ?? "n/a",
+          },
+          {
+            label: "Base / interaction",
+            value: `${selectedModel.selectedBaseFeatureCount?.toLocaleString() ?? "n/a"} / ${selectedModel.selectedInteractionFeatureCount?.toLocaleString() ?? "n/a"}`,
+          },
+          {
+            label: "Base floor",
+            value:
+              selectedModel.selectedBaseFloorMet === null || selectedModel.selectedBaseFloorMet === undefined
+                ? "not recorded"
+                : selectedModel.selectedBaseFloorMet
+                  ? "met"
+                  : "missed",
+            valueClassName:
+              selectedModel.selectedBaseFloorMet === null || selectedModel.selectedBaseFloorMet === undefined
+                ? undefined
+                : selectedModel.selectedBaseFloorMet
+                  ? "change-positive"
+                  : "change-negative",
+          },
+          {
+            label: "Regime features",
+            value: selectedModel.regimeFeatureCount?.toLocaleString() ?? "n/a",
+          },
+          {
+            label: "Bull / bear models",
+            value: `${selectedModel.bullModelCount?.toLocaleString() ?? "n/a"} / ${selectedModel.bearModelCount?.toLocaleString() ?? "n/a"}`,
+          },
+          {
+            label: "Regime train split",
+            value: `${selectedModel.regimeUpTrainObservations?.toLocaleString() ?? "n/a"} up / ${selectedModel.regimeDownTrainObservations?.toLocaleString() ?? "n/a"} down`,
+          },
+          {
+            label: "Test regime mix",
+            value:
+              selectedModel.testRegimeUpPct !== null && selectedModel.testRegimeUpPct !== undefined
+                ? `${selectedModel.testRegimeUpPct.toFixed(1)}% up`
+                : "n/a",
+          },
+          {
+            label: "Signal threshold",
+            value:
+              selectedModel.selectedThreshold !== null && selectedModel.selectedThreshold !== undefined
+                ? `${selectedModel.selectedThreshold.toFixed(4)}${selectedModel.selectedShortThreshold !== null && selectedModel.selectedShortThreshold !== undefined ? ` / ${selectedModel.selectedShortThreshold.toFixed(4)}` : ""}`
+                : "n/a",
+          },
+          {
+            label: "Score margin",
+            value:
+              selectedModel.selectedScoreMargin !== null && selectedModel.selectedScoreMargin !== undefined
+                ? selectedModel.selectedScoreMargin.toFixed(3)
+                : "n/a",
+          },
+        ],
+      },
+    ]
     : [];
   const averageStability = Math.round(average(showcaseModels.map((model) => model.stabilityScore)));
   const modelCarouselPosition = showcaseModels.length ? selectedModelIndex + 1 : 0;
@@ -1626,267 +1911,101 @@ export function ResearchDashboard() {
                     </button>
                   </div>
                 </div>
-                <div className="showcase-hero">
-                  <div className="showcase-score">
-                    <span>Stability score</span>
-                    <strong>{selectedModel.stabilityScore}</strong>
-                    <em>Average {averageStability || 0}</em>
-                  </div>
-                  <div className="showcase-metrics">
-                    <div>
-                      <span>Sharpe</span>
-                      <strong>{selectedModel.sharpeRatio.toFixed(2)}</strong>
-                    </div>
-                    <div>
-                      <span>Win rate</span>
-                      <strong>{selectedModel.winRatePct.toFixed(1)}%</strong>
-                    </div>
-                    <div>
-                      <span>Backtest total</span>
-                      <strong className={selectedModel.totalReturnPct >= 0 ? "change-positive" : "change-negative"}>
-                        {formatPercent(selectedModel.totalReturnPct)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Since model start</span>
-                      <strong className={selectedModel.returnSinceStartPct >= 0 ? "change-positive" : "change-negative"}>
-                        {formatPercent(selectedModel.returnSinceStartPct)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Max drawdown</span>
-                      <strong className="change-negative">{selectedModel.maxDrawdownPct.toFixed(2)}%</strong>
-                    </div>
-                    <div>
-                      <span>Positive splits</span>
-                      <strong>{selectedModel.positiveSplitCount}/{selectedModel.splitCount}</strong>
-                    </div>
-                  </div>
-                </div>
-                <div className={`model-readiness model-readiness-${selectedModel.readinessTone}`}>
-                  <div>
-                    <span>Model readiness</span>
-                    <strong>{selectedModel.readinessLabel}</strong>
-                  </div>
-                  <ul>
-                    {selectedModel.readinessReasons.slice(0, 3).map((reason) => (
-                      <li key={`${selectedModel.id}-${reason}`}>{reason}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="showcase-detail-grid">
-                  <div>
-                    <span>Created</span>
-                    <strong>{formatShortDateTime(selectedModel.createdAt)}</strong>
-                  </div>
-                  <div>
-                    <span>Backtest window</span>
-                    <strong>{selectedModel.backtestStart ?? "n/a"} to {selectedModel.backtestEnd ?? "n/a"}</strong>
-                  </div>
-                  <div>
-                    <span>Exposure</span>
-                    <strong>{selectedModel.exposurePct.toFixed(1)}%</strong>
-                  </div>
-                  <div>
-                    <span>Active observations</span>
-                    <strong>{selectedModel.activeObservations.toLocaleString()} / {selectedModel.observations.toLocaleString()}</strong>
-                  </div>
-                  <div>
-                    <span>Split return volatility</span>
-                    <strong>{selectedModel.splitReturnStd.toFixed(2)}%</strong>
-                  </div>
-                  <div>
-                    <span>Position changes</span>
-                    <strong>{selectedModel.trades.toLocaleString()}</strong>
-                  </div>
-                  <div>
-                    <span>Sharpe target</span>
-                    <strong className={selectedModel.targetMet ? "change-positive" : "change-negative"}>
-                      {selectedModel.sharpeTarget ? selectedModel.sharpeTarget.toFixed(1) : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Validation Sharpe</span>
-                    <strong>{selectedModel.validationSharpeRatio !== null && selectedModel.validationSharpeRatio !== undefined ? selectedModel.validationSharpeRatio.toFixed(2) : "n/a"}</strong>
-                  </div>
-                  <div>
-                    <span>Gross Sharpe</span>
-                    <strong>{selectedModel.grossSharpeRatio !== null && selectedModel.grossSharpeRatio !== undefined ? selectedModel.grossSharpeRatio.toFixed(2) : "n/a"}</strong>
-                  </div>
-                  <div>
-                    <span>Cost drag</span>
-                    <strong>{selectedModel.totalTransactionCostPct !== null && selectedModel.totalTransactionCostPct !== undefined ? `${selectedModel.totalTransactionCostPct.toFixed(2)}%` : "n/a"}</strong>
-                  </div>
-                  <div>
-                    <span>Worst split Sharpe</span>
-                    <strong>{selectedModel.worstSplitSharpe !== null && selectedModel.worstSplitSharpe !== undefined ? selectedModel.worstSplitSharpe.toFixed(2) : "n/a"}</strong>
-                  </div>
-                  <div>
-                    <span>Feature count</span>
-                    <strong>{selectedModel.selectedFeatureCount?.toLocaleString() ?? selectedModel.featureCount?.toLocaleString() ?? selectedModel.features.length.toLocaleString()}</strong>
-                  </div>
-                  <div>
-                    <span>Candidate pool</span>
-                    <strong>{selectedModel.featureCandidateCount?.toLocaleString() ?? "n/a"}</strong>
-                  </div>
-                  <div>
-                    <span>Base / interaction</span>
-                    <strong>
-                      {selectedModel.selectedBaseFeatureCount !== null && selectedModel.selectedBaseFeatureCount !== undefined
-                        ? selectedModel.selectedBaseFeatureCount.toLocaleString()
-                        : "n/a"}
-                      {" / "}
-                      {selectedModel.selectedInteractionFeatureCount !== null && selectedModel.selectedInteractionFeatureCount !== undefined
-                        ? selectedModel.selectedInteractionFeatureCount.toLocaleString()
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Base floor</span>
-                    <strong
-                      className={
-                        selectedModel.selectedBaseFloorMet === null || selectedModel.selectedBaseFloorMet === undefined
-                          ? ""
-                          : selectedModel.selectedBaseFloorMet
-                            ? "change-positive"
-                            : "change-negative"
-                      }
+                <div className="showcase-meta-strip" aria-label="Selected model metadata">
+                  {selectedModelMetaPills.map((pill) => (
+                    <div
+                      className={`showcase-meta-pill${pill.accent ? " showcase-meta-pill-accent" : ""}`}
+                      key={`${selectedModel.id}-${pill.label}`}
                     >
-                      {selectedModel.selectedBaseFloorMet === null || selectedModel.selectedBaseFloorMet === undefined
-                        ? "not recorded"
-                        : selectedModel.selectedBaseFloorMet
-                          ? "met"
-                          : "missed"}
-                    </strong>
+                      <span>{pill.label}</span>
+                      <strong>{pill.value}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="showcase-hero-panel">
+                  <div className="showcase-hero">
+                    <div className="showcase-score">
+                      <span>Stability score</span>
+                      <strong>{selectedModel.stabilityScore}</strong>
+                      <em>Average {averageStability || 0}</em>
+                    </div>
+                    <div className="showcase-metrics">
+                      <div>
+                        <span>Sharpe</span>
+                        <strong>{selectedModel.sharpeRatio.toFixed(2)}</strong>
+                      </div>
+                      <div>
+                        <span>Win rate</span>
+                        <strong>{selectedModel.winRatePct.toFixed(1)}%</strong>
+                      </div>
+                      <div>
+                        <span>Backtest total</span>
+                        <strong className={selectedModel.totalReturnPct >= 0 ? "change-positive" : "change-negative"}>
+                          {formatPercent(selectedModel.totalReturnPct)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Since model start</span>
+                        <strong className={selectedModel.returnSinceStartPct >= 0 ? "change-positive" : "change-negative"}>
+                          {formatPercent(selectedModel.returnSinceStartPct)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Max drawdown</span>
+                        <strong className="change-negative">{selectedModel.maxDrawdownPct.toFixed(2)}%</strong>
+                      </div>
+                      <div>
+                        <span>Positive splits</span>
+                        <strong>{selectedModel.positiveSplitCount}/{selectedModel.splitCount}</strong>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span>Regime features</span>
-                    <strong>{selectedModel.regimeFeatureCount?.toLocaleString() ?? "n/a"}</strong>
-                  </div>
-                  <div>
-                    <span>Bull / bear models</span>
-                    <strong>
-                      {selectedModel.bullModelCount !== null && selectedModel.bullModelCount !== undefined
-                        ? selectedModel.bullModelCount.toLocaleString()
-                        : "n/a"}
-                      {" / "}
-                      {selectedModel.bearModelCount !== null && selectedModel.bearModelCount !== undefined
-                        ? selectedModel.bearModelCount.toLocaleString()
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Regime train split</span>
-                    <strong>
-                      {selectedModel.regimeUpTrainObservations !== null && selectedModel.regimeUpTrainObservations !== undefined
-                        ? selectedModel.regimeUpTrainObservations.toLocaleString()
-                        : "n/a"}
-                      {" up / "}
-                      {selectedModel.regimeDownTrainObservations !== null && selectedModel.regimeDownTrainObservations !== undefined
-                        ? selectedModel.regimeDownTrainObservations.toLocaleString()
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Test regime mix</span>
-                    <strong>
-                      {selectedModel.testRegimeUpPct !== null && selectedModel.testRegimeUpPct !== undefined
-                        ? `${selectedModel.testRegimeUpPct.toFixed(1)}% up`
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>No-trade filter</span>
-                    <strong>
-                      {selectedModel.selectedUncertaintyMargin !== null && selectedModel.selectedUncertaintyMargin !== undefined
-                        ? `${selectedModel.selectedUncertaintyMargin.toFixed(3)} margin`
-                        : "off"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Filtered test days</span>
-                    <strong>
-                      {selectedModel.uncertaintySuppressedPct !== null && selectedModel.uncertaintySuppressedPct !== undefined
-                        ? `${selectedModel.uncertaintySuppressedPct.toFixed(1)}%`
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Signal threshold</span>
-                    <strong>
-                      {selectedModel.selectedThreshold !== null && selectedModel.selectedThreshold !== undefined ? selectedModel.selectedThreshold.toFixed(4) : "n/a"}
-                      {selectedModel.selectedShortThreshold !== null && selectedModel.selectedShortThreshold !== undefined ? ` / ${selectedModel.selectedShortThreshold.toFixed(4)}` : ""}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Score margin</span>
-                    <strong>
-                      {selectedModel.selectedScoreMargin !== null && selectedModel.selectedScoreMargin !== undefined
-                        ? selectedModel.selectedScoreMargin.toFixed(3)
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Turnover rule</span>
-                    <strong>
-                      {selectedModel.selectedMinHoldDays || selectedModel.selectedCooldownDays
-                        ? `hold ${selectedModel.selectedMinHoldDays ?? 1}d / cool ${selectedModel.selectedCooldownDays ?? 0}d`
-                        : "none"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Strategy side</span>
-                    <strong>{selectedModel.strategySide ?? "long_only"}</strong>
-                  </div>
-                  <div>
-                    <span>Candidate search</span>
-                    <strong>
-                      {selectedModel.selectedCandidate
-                        ? `${selectedModel.selectedCandidate} / best of ${selectedModel.candidateCount ?? 1}`
-                        : selectedModel.candidateCount
-                          ? `best of ${selectedModel.candidateCount}`
-                          : "single"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Validation score</span>
-                    <strong>
-                      {selectedModel.selectedValidationScore !== null && selectedModel.selectedValidationScore !== undefined
-                        ? selectedModel.selectedValidationScore.toFixed(3)
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Validation split floor</span>
-                    <strong>
-                      {selectedModel.validationWorstSplitSharpe !== null && selectedModel.validationWorstSplitSharpe !== undefined
-                        ? `${selectedModel.validationWorstSplitSharpe.toFixed(2)} worst`
-                        : "n/a"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Recent validation</span>
-                    <strong>
-                      {selectedModel.validationLastSplitSharpe !== null && selectedModel.validationLastSplitSharpe !== undefined
-                        ? `${selectedModel.validationLastSplitSharpe.toFixed(2)} last`
-                        : "n/a"}
-                    </strong>
+                  <div className={`model-readiness model-readiness-${selectedModel.readinessTone}`}>
+                    <div>
+                      <span>Model readiness</span>
+                      <strong>{selectedModel.readinessLabel}</strong>
+                    </div>
+                    <ul>
+                      {selectedModel.readinessReasons.slice(0, 3).map((reason) => (
+                        <li key={`${selectedModel.id}-${reason}`}>{reason}</li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
-                {selectedModel.equityCurve.length ? (
+                <div className="showcase-section-grid" aria-label="Model decision layers">
+                  {selectedModelSections.map((section) => (
+                    <section className="showcase-section-card" key={`${selectedModel.id}-${section.title}`}>
+                      <div className="showcase-section-head">
+                        <div>
+                          <span>{section.title}</span>
+                          <strong>{section.subtitle}</strong>
+                        </div>
+                      </div>
+                      <div className="detail-section-grid">
+                        {section.items.map((item) => (
+                          <div key={`${selectedModel.id}-${section.title}-${item.label}`}>
+                            <span>{item.label}</span>
+                            <strong className={item.valueClassName}>{item.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+                {selectedModelCurve ? (
                   <svg
                     className="showcase-equity-curve"
-                    viewBox={`0 0 ${modelCurveGeometry(selectedModel.equityCurve).width} ${modelCurveGeometry(selectedModel.equityCurve).height}`}
+                    viewBox={`0 0 ${selectedModelCurve.width} ${selectedModelCurve.height}`}
                     role="img"
                     aria-label={`${selectedModel.name} showcase equity curve`}
                   >
                     <line
                       x1="0"
-                      y1={modelCurveGeometry(selectedModel.equityCurve).baseline}
-                      x2={modelCurveGeometry(selectedModel.equityCurve).width}
-                      y2={modelCurveGeometry(selectedModel.equityCurve).baseline}
+                      y1={selectedModelCurve.baseline}
+                      x2={selectedModelCurve.width}
+                      y2={selectedModelCurve.baseline}
                     />
-                    <path d={modelCurveGeometry(selectedModel.equityCurve).path} />
+                    <path d={selectedModelCurve.path} />
                   </svg>
                 ) : null}
                 <div className="split-return-strip" aria-label="Split return stability">

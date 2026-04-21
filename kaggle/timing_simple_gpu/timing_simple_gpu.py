@@ -45,6 +45,7 @@ TURNOVER_RULES = [
     {"min_hold_days": 5, "cooldown_days": 2},
     {"min_hold_days": 5, "cooldown_days": 3},
 ]
+STOP_LOSS_PCT_CANDIDATES = [0.0, 2.5, 4.0, 5.5, 7.0, 9.0]
 
 
 def fetch_yahoo_chart(symbol: str) -> pd.DataFrame:
@@ -380,6 +381,7 @@ def backtest_timing(
     edge_gap: float,
     min_hold_days: int,
     cooldown_days: int,
+    stop_loss_pct: float = 0.0,
 ) -> pd.DataFrame:
     result = frame[["date", "target_return_1d", "high_volume_candle"]].copy()
     result["long_probability"] = long_scores
@@ -391,32 +393,48 @@ def backtest_timing(
     raw_position[allowed & (short_scores >= short_threshold) & ((short_scores - long_scores) >= edge_gap)] = -1.0
 
     positions = np.zeros(len(result), dtype=float)
+    trade_return_since_entry_pct = np.zeros(len(result), dtype=float)
+    stop_loss_triggered = np.zeros(len(result), dtype=bool)
     current_position = 0.0
-    hold_remaining = 0
+    held_days = 0
     cooldown_remaining = 0
+    trade_equity = 1.0
+    min_hold_days = max(1, int(min_hold_days))
+    cooldown_days = max(0, int(cooldown_days))
+    stop_loss_pct = max(0.0, float(stop_loss_pct))
     for index, desired_position in enumerate(raw_position):
+        applied_position = 0.0
         if current_position != 0:
-            if hold_remaining > 0:
-                positions[index] = current_position
-                hold_remaining -= 1
-                continue
-            if desired_position == current_position:
-                positions[index] = current_position
-                continue
-            current_position = 0.0
-            cooldown_remaining = cooldown_days
-            positions[index] = 0.0
-            continue
-
-        if cooldown_remaining > 0:
+            can_exit = held_days >= min_hold_days
+            if can_exit and desired_position != current_position:
+                current_position = 0.0
+                held_days = 0
+                trade_equity = 1.0
+                cooldown_remaining = cooldown_days
+            else:
+                applied_position = current_position
+        elif cooldown_remaining > 0:
             cooldown_remaining -= 1
-            positions[index] = 0.0
-            continue
-
-        if desired_position != 0:
+        elif desired_position != 0:
             current_position = desired_position
-            hold_remaining = max(1, min_hold_days) - 1
-            positions[index] = current_position
+            held_days = 0
+            trade_equity = 1.0
+            applied_position = current_position
+
+        positions[index] = applied_position
+        if applied_position != 0:
+            gross_trade_return = applied_position * float(result.at[index, "target_return_1d"]) / 100
+            trade_equity *= 1 + gross_trade_return
+            trade_return_since_entry_pct[index] = (trade_equity - 1) * 100
+            held_days += 1
+            if stop_loss_pct > 0 and trade_return_since_entry_pct[index] <= -stop_loss_pct:
+                stop_loss_triggered[index] = True
+                current_position = 0.0
+                held_days = 0
+                trade_equity = 1.0
+                cooldown_remaining = max(cooldown_remaining, cooldown_days)
+        else:
+            trade_equity = 1.0
 
     result["position"] = positions
     result["long_threshold"] = long_threshold
@@ -424,6 +442,9 @@ def backtest_timing(
     result["edge_gap"] = edge_gap
     result["min_hold_days"] = min_hold_days
     result["cooldown_days"] = cooldown_days
+    result["stop_loss_pct"] = stop_loss_pct
+    result["trade_return_since_entry_pct"] = trade_return_since_entry_pct
+    result["stop_loss_triggered"] = stop_loss_triggered
     result["gross_strategy_return"] = result["position"] * result["target_return_1d"] / 100
     result["position_change"] = result["position"].diff().abs().fillna(result["position"].abs())
     result["transaction_cost"] = result["position_change"] * ((TRANSACTION_COST_BPS + SLIPPAGE_BPS) / 10000)
@@ -437,6 +458,8 @@ def metrics_for(result: pd.DataFrame) -> dict:
     returns = result["strategy_return"].fillna(0)
     gross_returns = result["gross_strategy_return"].fillna(0)
     active = result[result["position"] != 0]
+    entries = int(((result["position"] != 0) & (result["position"].shift(fill_value=0) == 0)).sum())
+    stop_loss_exit_count = int(result.get("stop_loss_triggered", pd.Series(False, index=result.index)).astype(bool).sum())
     volatility = returns.std()
     gross_volatility = gross_returns.std()
     sharpe = (returns.mean() / volatility) * math.sqrt(252) if volatility and not np.isnan(volatility) else 0.0
@@ -455,6 +478,8 @@ def metrics_for(result: pd.DataFrame) -> dict:
         "exposure_pct": round(float((result["position"] != 0).mean() * 100), 2) if len(result) else 0.0,
         "trades": int(result["position_change"].sum()),
         "total_transaction_cost_pct": round(float(result["transaction_cost"].sum() * 100), 3),
+        "stop_loss_exit_count": stop_loss_exit_count,
+        "stop_loss_trigger_rate_pct": round(float((stop_loss_exit_count / max(1, entries)) * 100), 2) if entries else 0.0,
         "observations": int(len(result)),
         "active_observations": int(len(active)),
     }
@@ -507,33 +532,44 @@ def select_thresholds(validation: pd.DataFrame, long_scores: np.ndarray, short_s
         for short_threshold in short_candidates:
             for edge_gap in EDGE_GAP_CANDIDATES:
                 for rule in TURNOVER_RULES:
-                    result = backtest_timing(validation, long_scores, short_scores, long_threshold, short_threshold, edge_gap, **rule)
-                    metrics = metrics_for(result)
-                    if metrics["active_observations"] < MIN_VALIDATION_ACTIVE_DAYS:
-                        continue
-                    splits = split_metrics(result, "validation")
-                    score = validation_score(metrics, splits)
-                    candidate = {
-                        "selected_threshold": round(float(long_threshold), 6),
-                        "selected_short_threshold": round(float(short_threshold), 6),
-                        "selected_edge_gap": round(float(edge_gap), 6),
-                        "selected_min_hold_days": int(rule["min_hold_days"]),
-                        "selected_cooldown_days": int(rule["cooldown_days"]),
-                        "validation_selection_score": round(float(score), 3),
-                        "validation_worst_split_sharpe": round(float(min(item["sharpe_ratio"] for item in splits)), 3),
-                        "validation_last_split_sharpe": round(float(splits[-1]["sharpe_ratio"]), 3),
-                        "validation_positive_split_count": sum(1 for item in splits if item["total_return_pct"] > 0),
-                        "validation_split_count": len(splits),
-                        **{f"validation_{key}": value for key, value in metrics.items()},
-                    }
-                    if best is None or score > best["validation_selection_score"]:
-                        best = candidate
-                        best_result = result
+                    for stop_loss_pct in STOP_LOSS_PCT_CANDIDATES:
+                        result = backtest_timing(
+                            validation,
+                            long_scores,
+                            short_scores,
+                            long_threshold,
+                            short_threshold,
+                            edge_gap,
+                            stop_loss_pct=stop_loss_pct,
+                            **rule,
+                        )
+                        metrics = metrics_for(result)
+                        if metrics["active_observations"] < MIN_VALIDATION_ACTIVE_DAYS:
+                            continue
+                        splits = split_metrics(result, "validation")
+                        score = validation_score(metrics, splits)
+                        candidate = {
+                            "selected_threshold": round(float(long_threshold), 6),
+                            "selected_short_threshold": round(float(short_threshold), 6),
+                            "selected_edge_gap": round(float(edge_gap), 6),
+                            "selected_min_hold_days": int(rule["min_hold_days"]),
+                            "selected_cooldown_days": int(rule["cooldown_days"]),
+                            "selected_stop_loss_pct": round(float(stop_loss_pct), 3),
+                            "validation_selection_score": round(float(score), 3),
+                            "validation_worst_split_sharpe": round(float(min(item["sharpe_ratio"] for item in splits)), 3),
+                            "validation_last_split_sharpe": round(float(splits[-1]["sharpe_ratio"]), 3),
+                            "validation_positive_split_count": sum(1 for item in splits if item["total_return_pct"] > 0),
+                            "validation_split_count": len(splits),
+                            **{f"validation_{key}": value for key, value in metrics.items()},
+                        }
+                        if best is None or score > best["validation_selection_score"]:
+                            best = candidate
+                            best_result = result
 
     if best is None:
         long_threshold = float(np.nanquantile(long_scores, 0.85))
         short_threshold = float(np.nanquantile(short_scores, 0.85))
-        result = backtest_timing(validation, long_scores, short_scores, long_threshold, short_threshold, 0.10, 3, 2)
+        result = backtest_timing(validation, long_scores, short_scores, long_threshold, short_threshold, 0.10, 3, 2, stop_loss_pct=0.0)
         metrics = metrics_for(result)
         splits = split_metrics(result, "validation")
         best = {
@@ -542,6 +578,7 @@ def select_thresholds(validation: pd.DataFrame, long_scores: np.ndarray, short_s
             "selected_edge_gap": 0.10,
             "selected_min_hold_days": 3,
             "selected_cooldown_days": 2,
+            "selected_stop_loss_pct": 0.0,
             "validation_selection_score": round(float(validation_score(metrics, splits)), 3),
             "validation_worst_split_sharpe": round(float(min(item["sharpe_ratio"] for item in splits)), 3),
             "validation_last_split_sharpe": round(float(splits[-1]["sharpe_ratio"]), 3),
@@ -634,6 +671,7 @@ def run() -> None:
                 threshold_config["selected_edge_gap"],
                 threshold_config["selected_min_hold_days"],
                 threshold_config["selected_cooldown_days"],
+                threshold_config.get("selected_stop_loss_pct", 0.0),
             )
             metrics = metrics_for(result)
             splits = split_metrics(result, spec["name"])
@@ -656,6 +694,7 @@ def run() -> None:
                     "long_short_timing_heads",
                     "validation_selected_entry_edge",
                     "minimum_hold_and_cooldown",
+                    "close_based_stop_loss_floor",
                 ],
                 "feature_count": len(feature_cols),
                 "feature_candidate_count": len(base_features),
@@ -667,6 +706,7 @@ def run() -> None:
                 "selected_score_margin": threshold_config["selected_edge_gap"],
                 "selected_min_hold_days": threshold_config["selected_min_hold_days"],
                 "selected_cooldown_days": threshold_config["selected_cooldown_days"],
+                "selected_stop_loss_pct": threshold_config.get("selected_stop_loss_pct"),
                 "strategy_side": "long_short_timing",
                 "selected_candidate": spec["name"],
                 "selected_candidate_index": 1,

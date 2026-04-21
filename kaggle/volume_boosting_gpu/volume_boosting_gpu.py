@@ -46,6 +46,7 @@ SCORE_MARGIN_CANDIDATES = [0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1]
 CANDIDATES_PER_MODEL = 10
 RUN_REGIME_ENSEMBLE_ONLY = True
 REGIME_UNCERTAINTY_MARGINS = [0.0, 0.03, 0.05, 0.075, 0.10, 0.14]
+STOP_LOSS_PCT_CANDIDATES = [0.0, 2.5, 4.0, 5.5, 7.0, 9.0]
 VALIDATION_SPLIT_COUNT = 3
 VALIDATION_RETURN_WEIGHT = 0.015
 VALIDATION_DRAWDOWN_WEIGHT = 0.015
@@ -661,6 +662,7 @@ def backtest_from_scores(
     cooldown_days: int = 0,
     trade_mask: np.ndarray | None = None,
     no_trade_uncertainty_margin: float = 0.0,
+    stop_loss_pct: float = 0.0,
 ) -> pd.DataFrame:
     result = frame[["date", "target_return_1d", "high_volume_candle"]].copy()
     result["score"] = scores
@@ -678,41 +680,58 @@ def backtest_from_scores(
         raw_position[high_volume & (result["score"].to_numpy(dtype=float) <= effective_short_threshold)] = -1.0
 
     positions = np.zeros(len(result), dtype=float)
+    trade_return_since_entry_pct = np.zeros(len(result), dtype=float)
+    stop_loss_triggered = np.zeros(len(result), dtype=bool)
     current_position = 0.0
-    hold_remaining = 0
+    held_days = 0
     cooldown_remaining = 0
+    trade_equity = 1.0
     min_hold_days = max(1, int(min_hold_days))
     cooldown_days = max(0, int(cooldown_days))
+    stop_loss_pct = max(0.0, float(stop_loss_pct))
 
     for index, desired_position in enumerate(raw_position):
+        applied_position = 0.0
         if current_position != 0:
-            if hold_remaining > 0:
-                positions[index] = current_position
-                hold_remaining -= 1
-                continue
-            if desired_position == current_position:
-                positions[index] = current_position
-                continue
-            current_position = 0.0
-            cooldown_remaining = cooldown_days
-            positions[index] = 0.0
-            continue
-
-        if cooldown_remaining > 0:
+            can_exit = held_days >= min_hold_days
+            if can_exit and desired_position != current_position:
+                current_position = 0.0
+                held_days = 0
+                trade_equity = 1.0
+                cooldown_remaining = cooldown_days
+            else:
+                applied_position = current_position
+        elif cooldown_remaining > 0:
             cooldown_remaining -= 1
-            positions[index] = 0.0
-            continue
-
-        if desired_position != 0:
+        elif desired_position != 0:
             current_position = desired_position
-            hold_remaining = min_hold_days - 1
-            positions[index] = current_position
+            held_days = 0
+            trade_equity = 1.0
+            applied_position = current_position
+
+        positions[index] = applied_position
+        if applied_position != 0:
+            gross_trade_return = applied_position * float(result.at[index, "target_return_1d"]) / 100
+            trade_equity *= 1 + gross_trade_return
+            trade_return_since_entry_pct[index] = (trade_equity - 1) * 100
+            held_days += 1
+            if stop_loss_pct > 0 and trade_return_since_entry_pct[index] <= -stop_loss_pct:
+                stop_loss_triggered[index] = True
+                current_position = 0.0
+                held_days = 0
+                trade_equity = 1.0
+                cooldown_remaining = max(cooldown_remaining, cooldown_days)
+        else:
+            trade_equity = 1.0
 
     result["position"] = positions
     result["score_margin"] = score_margin
     result["min_hold_days"] = min_hold_days
     result["cooldown_days"] = cooldown_days
     result["no_trade_uncertainty_margin"] = no_trade_uncertainty_margin
+    result["stop_loss_pct"] = stop_loss_pct
+    result["trade_return_since_entry_pct"] = trade_return_since_entry_pct
+    result["stop_loss_triggered"] = stop_loss_triggered
     result["gross_strategy_return"] = result["position"] * result["target_return_1d"] / 100
     result["position_change"] = result["position"].diff().abs().fillna(result["position"].abs())
     result["transaction_cost"] = result["position_change"] * ((TRANSACTION_COST_BPS + SLIPPAGE_BPS) / 10000)
@@ -726,6 +745,8 @@ def metrics_for(result: pd.DataFrame) -> dict:
     returns = result["strategy_return"].fillna(0)
     gross_returns = result.get("gross_strategy_return", result["strategy_return"]).fillna(0)
     active = result[result["position"] != 0]
+    entries = int(((result["position"] != 0) & (result["position"].shift(fill_value=0) == 0)).sum())
+    stop_loss_exit_count = int(result.get("stop_loss_triggered", pd.Series(False, index=result.index)).astype(bool).sum())
     volatility = returns.std()
     sharpe = (returns.mean() / volatility) * math.sqrt(252) if volatility and not np.isnan(volatility) else 0.0
     gross_volatility = gross_returns.std()
@@ -749,6 +770,8 @@ def metrics_for(result: pd.DataFrame) -> dict:
         "trades": int(result.get("position_change", result["position"].diff().abs().fillna(0)).sum()),
         "total_transaction_cost_pct": round(float(result.get("transaction_cost", pd.Series(0, index=result.index)).sum() * 100), 3),
         "uncertainty_suppressed_pct": round(float((~result.get("trade_allowed", pd.Series(True, index=result.index)).astype(bool)).mean() * 100), 2) if len(result) else 0.0,
+        "stop_loss_exit_count": stop_loss_exit_count,
+        "stop_loss_trigger_rate_pct": round(float((stop_loss_exit_count / max(1, entries)) * 100), 2) if entries else 0.0,
         "observations": int(len(result)),
         "active_observations": int(len(active)),
     }
@@ -873,7 +896,7 @@ def select_thresholds(
     validation: pd.DataFrame,
     scores: np.ndarray,
     regime_probability: np.ndarray | None = None,
-) -> tuple[float, float | None, bool, float, int, int, float, dict]:
+) -> tuple[float, float | None, bool, float, int, int, float, float, dict]:
     high_volume_scores = scores[validation["high_volume_candle"].to_numpy(dtype=bool)]
     if len(high_volume_scores) == 0:
         return float(np.nanmean(scores)), None, False, 0.0, 1, 0, 0.0, {"validation_sharpe_ratio": 0.0}
@@ -889,6 +912,7 @@ def select_thresholds(
     best_min_hold_days = 1
     best_cooldown_days = 0
     best_uncertainty_margin = 0.0
+    best_stop_loss_pct = 0.0
     best_metrics = {"sharpe_ratio": -999.0, "total_return_pct": -999.0, "active_observations": 0}
     uncertainty_margins = REGIME_UNCERTAINTY_MARGINS if regime_probability is not None else [0.0]
 
@@ -897,27 +921,30 @@ def select_thresholds(
             for uncertainty_margin in uncertainty_margins:
                 trade_mask = regime_uncertainty_trade_mask(regime_probability, uncertainty_margin, len(validation))
                 for turnover_rule in TURNOVER_RULE_CANDIDATES:
-                    result = backtest_from_scores(
-                        validation,
-                        scores,
-                        long_threshold,
-                        score_margin=score_margin,
-                        trade_mask=trade_mask,
-                        no_trade_uncertainty_margin=uncertainty_margin,
-                        **turnover_rule,
-                    )
-                    metrics = add_split_aware_metrics(metrics_for(result), result)
-                    if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-                        continue
-                    if threshold_rank(metrics) > threshold_rank(best_metrics):
-                        best_long = long_threshold
-                        best_short = None
-                        best_allow_short = False
-                        best_margin = score_margin
-                        best_min_hold_days = turnover_rule["min_hold_days"]
-                        best_cooldown_days = turnover_rule["cooldown_days"]
-                        best_uncertainty_margin = uncertainty_margin
-                        best_metrics = metrics
+                    for stop_loss_pct in STOP_LOSS_PCT_CANDIDATES:
+                        result = backtest_from_scores(
+                            validation,
+                            scores,
+                            long_threshold,
+                            score_margin=score_margin,
+                            trade_mask=trade_mask,
+                            no_trade_uncertainty_margin=uncertainty_margin,
+                            stop_loss_pct=stop_loss_pct,
+                            **turnover_rule,
+                        )
+                        metrics = add_split_aware_metrics(metrics_for(result), result)
+                        if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                            continue
+                        if threshold_rank(metrics) > threshold_rank(best_metrics):
+                            best_long = long_threshold
+                            best_short = None
+                            best_allow_short = False
+                            best_margin = score_margin
+                            best_min_hold_days = turnover_rule["min_hold_days"]
+                            best_cooldown_days = turnover_rule["cooldown_days"]
+                            best_uncertainty_margin = uncertainty_margin
+                            best_stop_loss_pct = stop_loss_pct
+                            best_metrics = metrics
 
     for long_threshold in long_candidates:
         for short_threshold in short_candidates:
@@ -927,36 +954,40 @@ def select_thresholds(
                 for uncertainty_margin in uncertainty_margins:
                     trade_mask = regime_uncertainty_trade_mask(regime_probability, uncertainty_margin, len(validation))
                     for turnover_rule in TURNOVER_RULE_CANDIDATES:
-                        result = backtest_from_scores(
-                            validation,
-                            scores,
-                            long_threshold,
-                            short_threshold,
-                            allow_short=True,
-                            score_margin=score_margin,
-                            trade_mask=trade_mask,
-                            no_trade_uncertainty_margin=uncertainty_margin,
-                            **turnover_rule,
-                        )
-                        metrics = add_split_aware_metrics(metrics_for(result), result)
-                        if metrics["active_observations"] < MIN_VALIDATION_TRADES:
-                            continue
-                        if threshold_rank(metrics) > threshold_rank(best_metrics):
-                            best_long = long_threshold
-                            best_short = short_threshold
-                            best_allow_short = True
-                            best_margin = score_margin
-                            best_min_hold_days = turnover_rule["min_hold_days"]
-                            best_cooldown_days = turnover_rule["cooldown_days"]
-                            best_uncertainty_margin = uncertainty_margin
-                            best_metrics = metrics
+                        for stop_loss_pct in STOP_LOSS_PCT_CANDIDATES:
+                            result = backtest_from_scores(
+                                validation,
+                                scores,
+                                long_threshold,
+                                short_threshold,
+                                allow_short=True,
+                                score_margin=score_margin,
+                                trade_mask=trade_mask,
+                                no_trade_uncertainty_margin=uncertainty_margin,
+                                stop_loss_pct=stop_loss_pct,
+                                **turnover_rule,
+                            )
+                            metrics = add_split_aware_metrics(metrics_for(result), result)
+                            if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                                continue
+                            if threshold_rank(metrics) > threshold_rank(best_metrics):
+                                best_long = long_threshold
+                                best_short = short_threshold
+                                best_allow_short = True
+                                best_margin = score_margin
+                                best_min_hold_days = turnover_rule["min_hold_days"]
+                                best_cooldown_days = turnover_rule["cooldown_days"]
+                                best_uncertainty_margin = uncertainty_margin
+                                best_stop_loss_pct = stop_loss_pct
+                                best_metrics = metrics
 
     if best_metrics["sharpe_ratio"] == -999.0:
         best_long = float(np.nanquantile(high_volume_scores, 0.80))
-        fallback_result = backtest_from_scores(validation, scores, best_long)
+        fallback_result = backtest_from_scores(validation, scores, best_long, stop_loss_pct=0.0)
         best_metrics = add_split_aware_metrics(metrics_for(fallback_result), fallback_result)
 
     best_metrics["uncertainty_margin"] = round(float(best_uncertainty_margin), 6)
+    best_metrics["selected_stop_loss_pct"] = round(float(best_stop_loss_pct), 3)
     best_metrics["selection_score"] = round(float(selection_score(best_metrics)), 3)
     best_metrics = {f"validation_{key}": value for key, value in best_metrics.items()}
     return (
@@ -967,6 +998,7 @@ def select_thresholds(
         int(best_min_hold_days),
         int(best_cooldown_days),
         float(best_uncertainty_margin),
+        float(best_stop_loss_pct),
         best_metrics,
     )
 
@@ -1294,7 +1326,7 @@ def run():
                             candidate.get("fallback_factory"),
                         )
                         validation_scores = predict_signal(validation_model, validation[feature_cols])
-                    long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days, uncertainty_margin, validation_metrics = select_thresholds(
+                    long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days, uncertainty_margin, stop_loss_pct, validation_metrics = select_thresholds(
                         validation,
                         validation_scores,
                         validation_regime_probability if candidate.get("kind") == "regime_ensemble" else None,
@@ -1310,6 +1342,7 @@ def run():
                         "selected_score_margin": round(float(score_margin), 6),
                         "selected_min_hold_days": int(min_hold_days),
                         "selected_cooldown_days": int(cooldown_days),
+                        "selected_stop_loss_pct": round(float(stop_loss_pct), 3),
                         "selected_uncertainty_margin": round(float(uncertainty_margin), 6),
                         "strategy_side": "long_short" if allow_short else "long_only",
                         "hyperparameters": safe_json_params(candidate["params"]),
@@ -1328,6 +1361,7 @@ def run():
                             "score_margin": score_margin,
                             "min_hold_days": min_hold_days,
                             "cooldown_days": cooldown_days,
+                            "stop_loss_pct": stop_loss_pct,
                             "uncertainty_margin": uncertainty_margin,
                         }
                 except Exception as candidate_error:
@@ -1349,6 +1383,7 @@ def run():
             score_margin = float(best_trial["score_margin"])
             min_hold_days = int(best_trial["min_hold_days"])
             cooldown_days = int(best_trial["cooldown_days"])
+            stop_loss_pct = float(best_trial.get("stop_loss_pct", 0.0))
             uncertainty_margin = float(best_trial.get("uncertainty_margin", 0.0))
             validation_metrics = {
                 key: value
@@ -1401,6 +1436,7 @@ def run():
                 cooldown_days,
                 trade_mask=test_trade_mask,
                 no_trade_uncertainty_margin=uncertainty_margin,
+                stop_loss_pct=stop_loss_pct,
             )
             if selected_candidate.get("kind") == "regime_ensemble":
                 result["regime_probability"] = test_regime_probability
@@ -1443,6 +1479,7 @@ def run():
                     "bear_regime_three_model_ensemble",
                     "split_aware_walk_forward_validation",
                     "regime_uncertainty_no_trade_filter",
+                    "close_based_stop_loss_floor",
                 ],
                 "feature_count": len(feature_cols),
                 "feature_candidate_count": feature_selection["candidate_feature_count"],
@@ -1455,6 +1492,7 @@ def run():
                 "selected_score_margin": round(float(score_margin), 6),
                 "selected_min_hold_days": int(min_hold_days),
                 "selected_cooldown_days": int(cooldown_days),
+                "selected_stop_loss_pct": round(float(stop_loss_pct), 3),
                 "selected_uncertainty_margin": round(float(uncertainty_margin), 6),
                 "strategy_side": "long_short" if allow_short else "long_only",
                 "selected_candidate": best_trial["candidate_name"],

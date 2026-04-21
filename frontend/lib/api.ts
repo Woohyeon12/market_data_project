@@ -228,6 +228,7 @@ export type KaggleModelResult = {
   selected_score_margin?: number | null;
   selected_min_hold_days?: number | null;
   selected_cooldown_days?: number | null;
+  selected_stop_loss_pct?: number | null;
   selected_uncertainty_margin?: number | null;
   strategy_side?: string | null;
   selected_candidate?: string | null;
@@ -245,6 +246,8 @@ export type KaggleModelResult = {
   validation_recent_decay_penalty?: number | null;
   validation_uncertainty_suppressed_pct?: number | null;
   uncertainty_suppressed_pct?: number | null;
+  stop_loss_exit_count?: number | null;
+  stop_loss_trigger_rate_pct?: number | null;
   sharpe_target?: number | null;
   target_met?: boolean | null;
   package_candidate?: boolean | null;

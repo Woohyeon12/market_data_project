@@ -205,6 +205,7 @@ class KaggleModelResult(BaseModel):
     selected_score_margin: float | None = None
     selected_min_hold_days: int | None = None
     selected_cooldown_days: int | None = None
+    selected_stop_loss_pct: float | None = None
     selected_uncertainty_margin: float | None = None
     strategy_side: str | None = None
     selected_candidate: str | None = None
@@ -222,6 +223,8 @@ class KaggleModelResult(BaseModel):
     validation_recent_decay_penalty: float | None = None
     validation_uncertainty_suppressed_pct: float | None = None
     uncertainty_suppressed_pct: float | None = None
+    stop_loss_exit_count: int | None = None
+    stop_loss_trigger_rate_pct: float | None = None
     sharpe_target: float | None = None
     target_met: bool | None = None
     package_candidate: bool | None = None
