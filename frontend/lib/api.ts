@@ -238,6 +238,12 @@ export type KaggleModelResult = {
   selected_hyperparameters?: Record<string, number | string | boolean | null>;
   candidate_trials?: Record<string, number | string | boolean | null | Record<string, number | string | boolean | null>>[];
   validation_sharpe_ratio?: number | null;
+  validation_ensemble_score?: number | null;
+  validation_min_window_score?: number | null;
+  validation_2y_selection_score?: number | null;
+  validation_3y_selection_score?: number | null;
+  validation_2y_sharpe_ratio?: number | null;
+  validation_3y_sharpe_ratio?: number | null;
   validation_worst_split_sharpe?: number | null;
   validation_last_split_sharpe?: number | null;
   validation_positive_split_count?: number | null;
@@ -271,6 +277,8 @@ export type KaggleModelRun = {
   high_volume_rule: string;
   training_window: string;
   validation_window?: string | null;
+  validation_window_2y?: string | null;
+  validation_window_3y?: string | null;
   backtest_window: string;
   batch_size: number;
   models_requested: number;

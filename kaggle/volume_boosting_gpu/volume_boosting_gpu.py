@@ -27,7 +27,12 @@ SYMBOLS = {
 }
 
 TRAIN_END_OFFSET = 504
-VALIDATION_OFFSET = 252
+VALIDATION_OFFSET_2Y = 504
+VALIDATION_OFFSET_3Y = 756
+VALIDATION_WINDOW_CONFIGS = (
+    {"label": "2y", "offset": VALIDATION_OFFSET_2Y, "weight": 0.5},
+    {"label": "3y", "offset": VALIDATION_OFFSET_3Y, "weight": 0.5},
+)
 HIGH_VOLUME_QUANTILE = 0.70
 INTERACTION_FEATURE_LIMIT = 32
 MIN_SELECTED_FEATURES = 120
@@ -443,28 +448,28 @@ def select_low_correlation_features(features: pd.DataFrame, target: pd.Series, b
 def build_model_matrices(
     data: pd.DataFrame,
     base_features: list[str],
-    test_start_index: int,
+    feature_fit_end_index: int,
 ) -> tuple[pd.DataFrame, list[str], list[str], dict]:
-    train_all = data.iloc[:test_start_index].copy()
+    train_all = data.iloc[:feature_fit_end_index].copy()
     base_means, base_stds = fit_standardizer(train_all, base_features)
     base_normalized = apply_standardizer(data, base_features, base_means, base_stds)
     base_normalized.columns = [f"z_{column}" for column in base_normalized.columns]
     normalized_base_features = list(base_normalized.columns)
 
-    train_normalized = base_normalized.iloc[:test_start_index].copy()
+    train_normalized = base_normalized.iloc[:feature_fit_end_index].copy()
     interaction_sources = select_interaction_sources(
         train_normalized,
         train_all["target_return_1d"],
         normalized_base_features,
     )
     raw_interactions = build_second_order_features(base_normalized, interaction_sources)
-    interaction_means, interaction_stds = fit_standardizer(raw_interactions.iloc[:test_start_index], list(raw_interactions.columns))
+    interaction_means, interaction_stds = fit_standardizer(raw_interactions.iloc[:feature_fit_end_index], list(raw_interactions.columns))
     normalized_interactions = apply_standardizer(raw_interactions, list(raw_interactions.columns), interaction_means, interaction_stds)
     normalized_interactions.columns = [f"z2_{column}" for column in normalized_interactions.columns]
 
     feature_candidates = pd.concat([base_normalized, normalized_interactions], axis=1).replace([np.inf, -np.inf], np.nan).fillna(0.0)
     selected_features, feature_selection = select_low_correlation_features(
-        feature_candidates.iloc[:test_start_index],
+        feature_candidates.iloc[:feature_fit_end_index],
         train_all["target_return_1d"],
         len(base_features),
     )
@@ -814,7 +819,8 @@ def package_gate(metrics: dict, split_metrics: list[dict], validation_metrics: d
 
 def threshold_rank(metrics: dict) -> tuple[float, float, float, float, int, float, float, float, int]:
     return (
-        float(selection_score(metrics)),
+        float(metrics.get("selection_score", selection_score(metrics))),
+        float(metrics.get("min_window_score", metrics.get("worst_split_sharpe", -999.0))),
         float(metrics.get("sharpe_ratio", -999.0)),
         float(metrics.get("worst_split_sharpe", -999.0)),
         float(metrics.get("last_split_sharpe", -999.0)),
@@ -892,14 +898,94 @@ def selection_score(metrics: dict, prefix: str = "") -> float:
     )
 
 
+def weighted_average(values: list[tuple[float, float]], default: float = 0.0) -> float:
+    total_weight = sum(weight for _, weight in values)
+    if total_weight <= 0:
+        return default
+    return float(sum(value * weight for value, weight in values) / total_weight)
+
+
+def aggregate_validation_window_metrics(window_evaluations: list[dict]) -> dict:
+    if not window_evaluations:
+        return {
+            "selection_score": -999.0,
+            "ensemble_score": -999.0,
+            "min_window_score": -999.0,
+            "sharpe_ratio": -999.0,
+            "total_return_pct": -999.0,
+            "max_drawdown_pct": -999.0,
+            "total_transaction_cost_pct": 999.0,
+            "trades": 999999.0,
+            "active_observations": 0,
+            "worst_split_sharpe": -999.0,
+            "last_split_sharpe": -999.0,
+            "positive_split_count": 0,
+            "split_count": 0,
+            "split_sharpe_std": 0.0,
+            "recent_decay_penalty": 0.0,
+            "uncertainty_suppressed_pct": 0.0,
+        }
+
+    recent_window = next((item for item in window_evaluations if item["label"] == "2y"), window_evaluations[0])
+    long_window = next((item for item in window_evaluations if item["label"] == "3y"), window_evaluations[-1])
+    all_split_sharpes = [
+        float(value)
+        for window in window_evaluations
+        for value in window["metrics"].get("split_sharpes", [])
+    ]
+    selection_scores = [(float(window["score"]), float(window["weight"])) for window in window_evaluations]
+    sharpe_values = [(float(window["metrics"]["sharpe_ratio"]), float(window["weight"])) for window in window_evaluations]
+    return_values = [(float(window["metrics"]["total_return_pct"]), float(window["weight"])) for window in window_evaluations]
+    cost_values = [(float(window["metrics"]["total_transaction_cost_pct"]), float(window["weight"])) for window in window_evaluations]
+    trade_values = [(float(window["metrics"]["trades"]), float(window["weight"])) for window in window_evaluations]
+    uncertainty_values = [
+        (float(window["metrics"].get("uncertainty_suppressed_pct", 0.0)), float(window["weight"]))
+        for window in window_evaluations
+    ]
+    active_values = [int(window["metrics"]["active_observations"]) for window in window_evaluations]
+    recent_decay = max(
+        0.0,
+        float(long_window["metrics"].get("sharpe_ratio", 0.0)) - float(recent_window["metrics"].get("sharpe_ratio", 0.0)),
+    )
+    summary = {
+        "selection_score": round(weighted_average(selection_scores, -999.0), 3),
+        "ensemble_score": round(weighted_average(selection_scores, -999.0), 3),
+        "min_window_score": round(float(min(float(window["score"]) for window in window_evaluations)), 3),
+        "sharpe_ratio": round(weighted_average(sharpe_values, -999.0), 3),
+        "total_return_pct": round(weighted_average(return_values, -999.0), 3),
+        "max_drawdown_pct": round(float(min(float(window["metrics"]["max_drawdown_pct"]) for window in window_evaluations)), 3),
+        "total_transaction_cost_pct": round(weighted_average(cost_values, 999.0), 3),
+        "trades": round(weighted_average(trade_values, 999999.0), 3),
+        "active_observations": int(min(active_values)) if active_values else 0,
+        "worst_split_sharpe": round(float(min(all_split_sharpes)) if all_split_sharpes else 0.0, 3),
+        "last_split_sharpe": round(float(recent_window["metrics"].get("last_split_sharpe", 0.0)), 3),
+        "positive_split_count": int(sum(int(window["metrics"].get("positive_split_count", 0)) for window in window_evaluations)),
+        "split_count": int(sum(int(window["metrics"].get("split_count", 0)) for window in window_evaluations)),
+        "split_sharpe_std": round(float(np.std(all_split_sharpes)) if all_split_sharpes else 0.0, 3),
+        "recent_decay_penalty": round(float(recent_decay), 3),
+        "uncertainty_suppressed_pct": round(weighted_average(uncertainty_values, 0.0), 3),
+    }
+    for window in window_evaluations:
+        label = window["label"]
+        summary[f"{label}_selection_score"] = round(float(window["score"]), 3)
+        summary[f"{label}_sharpe_ratio"] = round(float(window["metrics"]["sharpe_ratio"]), 3)
+        summary[f"{label}_total_return_pct"] = round(float(window["metrics"]["total_return_pct"]), 3)
+        summary[f"{label}_active_observations"] = int(window["metrics"]["active_observations"])
+    return summary
+
+
 def select_thresholds(
-    validation: pd.DataFrame,
-    scores: np.ndarray,
-    regime_probability: np.ndarray | None = None,
+    validation_windows: list[dict],
 ) -> tuple[float, float | None, bool, float, int, int, float, float, dict]:
-    high_volume_scores = scores[validation["high_volume_candle"].to_numpy(dtype=bool)]
+    high_volume_slices = []
+    for window in validation_windows:
+        mask = window["frame"]["high_volume_candle"].to_numpy(dtype=bool)
+        if mask.any():
+            high_volume_slices.append(window["scores"][mask])
+    high_volume_scores = np.concatenate(high_volume_slices) if high_volume_slices else np.asarray([], dtype=float)
     if len(high_volume_scores) == 0:
-        return float(np.nanmean(scores)), None, False, 0.0, 1, 0, 0.0, {"validation_sharpe_ratio": 0.0}
+        fallback_scores = validation_windows[0]["scores"] if validation_windows else np.asarray([0.0], dtype=float)
+        return float(np.nanmean(fallback_scores)), None, False, 0.0, 1, 0, 0.0, 0.0, {"validation_sharpe_ratio": 0.0}
 
     long_quantiles = np.linspace(0.52, 0.97, 20)
     short_quantiles = np.linspace(0.03, 0.42, 18)
@@ -914,27 +1000,43 @@ def select_thresholds(
     best_uncertainty_margin = 0.0
     best_stop_loss_pct = 0.0
     best_metrics = {"sharpe_ratio": -999.0, "total_return_pct": -999.0, "active_observations": 0}
-    uncertainty_margins = REGIME_UNCERTAINTY_MARGINS if regime_probability is not None else [0.0]
+    uncertainty_margins = REGIME_UNCERTAINTY_MARGINS if any(window.get("regime_probability") is not None for window in validation_windows) else [0.0]
 
     for long_threshold in long_candidates:
         for score_margin in SCORE_MARGIN_CANDIDATES:
             for uncertainty_margin in uncertainty_margins:
-                trade_mask = regime_uncertainty_trade_mask(regime_probability, uncertainty_margin, len(validation))
                 for turnover_rule in TURNOVER_RULE_CANDIDATES:
                     for stop_loss_pct in STOP_LOSS_PCT_CANDIDATES:
-                        result = backtest_from_scores(
-                            validation,
-                            scores,
-                            long_threshold,
-                            score_margin=score_margin,
-                            trade_mask=trade_mask,
-                            no_trade_uncertainty_margin=uncertainty_margin,
-                            stop_loss_pct=stop_loss_pct,
-                            **turnover_rule,
-                        )
-                        metrics = add_split_aware_metrics(metrics_for(result), result)
-                        if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                        window_evaluations = []
+                        for window in validation_windows:
+                            trade_mask = regime_uncertainty_trade_mask(
+                                window.get("regime_probability"),
+                                uncertainty_margin,
+                                len(window["frame"]),
+                            )
+                            result = backtest_from_scores(
+                                window["frame"],
+                                window["scores"],
+                                long_threshold,
+                                score_margin=score_margin,
+                                trade_mask=trade_mask,
+                                no_trade_uncertainty_margin=uncertainty_margin,
+                                stop_loss_pct=stop_loss_pct,
+                                **turnover_rule,
+                            )
+                            metrics = add_split_aware_metrics(metrics_for(result), result)
+                            if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                                window_evaluations = []
+                                break
+                            window_evaluations.append({
+                                "label": window["label"],
+                                "weight": window["weight"],
+                                "metrics": metrics,
+                                "score": selection_score(metrics),
+                            })
+                        if not window_evaluations:
                             continue
+                        metrics = aggregate_validation_window_metrics(window_evaluations)
                         if threshold_rank(metrics) > threshold_rank(best_metrics):
                             best_long = long_threshold
                             best_short = None
@@ -952,24 +1054,40 @@ def select_thresholds(
                 continue
             for score_margin in SCORE_MARGIN_CANDIDATES:
                 for uncertainty_margin in uncertainty_margins:
-                    trade_mask = regime_uncertainty_trade_mask(regime_probability, uncertainty_margin, len(validation))
                     for turnover_rule in TURNOVER_RULE_CANDIDATES:
                         for stop_loss_pct in STOP_LOSS_PCT_CANDIDATES:
-                            result = backtest_from_scores(
-                                validation,
-                                scores,
-                                long_threshold,
-                                short_threshold,
-                                allow_short=True,
-                                score_margin=score_margin,
-                                trade_mask=trade_mask,
-                                no_trade_uncertainty_margin=uncertainty_margin,
-                                stop_loss_pct=stop_loss_pct,
-                                **turnover_rule,
-                            )
-                            metrics = add_split_aware_metrics(metrics_for(result), result)
-                            if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                            window_evaluations = []
+                            for window in validation_windows:
+                                trade_mask = regime_uncertainty_trade_mask(
+                                    window.get("regime_probability"),
+                                    uncertainty_margin,
+                                    len(window["frame"]),
+                                )
+                                result = backtest_from_scores(
+                                    window["frame"],
+                                    window["scores"],
+                                    long_threshold,
+                                    short_threshold,
+                                    allow_short=True,
+                                    score_margin=score_margin,
+                                    trade_mask=trade_mask,
+                                    no_trade_uncertainty_margin=uncertainty_margin,
+                                    stop_loss_pct=stop_loss_pct,
+                                    **turnover_rule,
+                                )
+                                metrics = add_split_aware_metrics(metrics_for(result), result)
+                                if metrics["active_observations"] < MIN_VALIDATION_TRADES:
+                                    window_evaluations = []
+                                    break
+                                window_evaluations.append({
+                                    "label": window["label"],
+                                    "weight": window["weight"],
+                                    "metrics": metrics,
+                                    "score": selection_score(metrics),
+                                })
+                            if not window_evaluations:
                                 continue
+                            metrics = aggregate_validation_window_metrics(window_evaluations)
                             if threshold_rank(metrics) > threshold_rank(best_metrics):
                                 best_long = long_threshold
                                 best_short = short_threshold
@@ -983,12 +1101,21 @@ def select_thresholds(
 
     if best_metrics["sharpe_ratio"] == -999.0:
         best_long = float(np.nanquantile(high_volume_scores, 0.80))
-        fallback_result = backtest_from_scores(validation, scores, best_long, stop_loss_pct=0.0)
-        best_metrics = add_split_aware_metrics(metrics_for(fallback_result), fallback_result)
+        fallback_windows = []
+        for window in validation_windows:
+            fallback_result = backtest_from_scores(window["frame"], window["scores"], best_long, stop_loss_pct=0.0)
+            fallback_metrics = add_split_aware_metrics(metrics_for(fallback_result), fallback_result)
+            fallback_windows.append({
+                "label": window["label"],
+                "weight": window["weight"],
+                "metrics": fallback_metrics,
+                "score": selection_score(fallback_metrics),
+            })
+        best_metrics = aggregate_validation_window_metrics(fallback_windows)
 
     best_metrics["uncertainty_margin"] = round(float(best_uncertainty_margin), 6)
     best_metrics["selected_stop_loss_pct"] = round(float(best_stop_loss_pct), 3)
-    best_metrics["selection_score"] = round(float(selection_score(best_metrics)), 3)
+    best_metrics["selection_score"] = round(float(best_metrics.get("selection_score", selection_score(best_metrics))), 3)
     best_metrics = {f"validation_{key}": value for key, value in best_metrics.items()}
     return (
         float(best_long),
@@ -1059,7 +1186,7 @@ def fit_model(factory, x: pd.DataFrame, y: pd.Series, model_type: str, fallback_
 
 
 def validation_selection_score(validation_metrics: dict) -> float:
-    return selection_score(validation_metrics, "validation_")
+    return float(validation_metrics.get("validation_selection_score", selection_score(validation_metrics, "validation_")))
 
 
 def validation_rank(validation_metrics: dict) -> tuple[float, float, float, float, int, float, float, float, int]:
@@ -1244,12 +1371,13 @@ def safe_json_params(params: dict) -> dict:
 
 def run():
     data, base_features = build_dataset()
-    if len(data) <= TRAIN_END_OFFSET + VALIDATION_OFFSET + 200:
+    if len(data) <= TRAIN_END_OFFSET + VALIDATION_OFFSET_3Y + 200:
         raise RuntimeError("Not enough data for older-than-two-year training, validation, and two-year backtest.")
 
     test_start_index = len(data) - TRAIN_END_OFFSET
-    validation_start_index = test_start_index - VALIDATION_OFFSET
-    feature_matrix, feature_cols, interaction_sources, feature_selection = build_model_matrices(data, base_features, test_start_index)
+    validation_start_index_2y = test_start_index - VALIDATION_OFFSET_2Y
+    validation_start_index_3y = test_start_index - VALIDATION_OFFSET_3Y
+    feature_matrix, feature_cols, interaction_sources, feature_selection = build_model_matrices(data, base_features, validation_start_index_3y)
     regime_feature_cols = available_regime_features(data)
     model_frame = pd.concat(
         [
@@ -1259,8 +1387,19 @@ def run():
         axis=1,
     )
 
-    fit_frame = model_frame.iloc[:validation_start_index].copy()
-    validation = model_frame.iloc[validation_start_index:test_start_index].copy()
+    fit_frame = model_frame.iloc[:validation_start_index_3y].copy()
+    validation_windows = [
+        {
+            "label": "2y",
+            "weight": 0.5,
+            "frame": model_frame.iloc[validation_start_index_2y:test_start_index].copy(),
+        },
+        {
+            "label": "3y",
+            "weight": 0.5,
+            "frame": model_frame.iloc[validation_start_index_3y:test_start_index].copy(),
+        },
+    ]
     train_full = model_frame.iloc[:test_start_index].copy()
     test = model_frame.iloc[test_start_index:].copy()
 
@@ -1308,14 +1447,25 @@ def run():
                             regime_feature_cols,
                         )
                         validation_model_type = model_type
-                        validation_scores, validation_regime_probability = predict_regime_ensemble(
-                            validation_model,
-                            validation,
-                            feature_cols,
-                            regime_feature_cols,
-                        )
                         candidate_metadata = validation_model["metadata"]
-                        candidate_metadata["validation_regime_up_pct"] = round(float((validation_regime_probability >= 0.5).mean() * 100), 2)
+                        candidate_validation_windows = []
+                        validation_regime_mix = []
+                        for window in validation_windows:
+                            validation_scores, validation_regime_probability = predict_regime_ensemble(
+                                validation_model,
+                                window["frame"],
+                                feature_cols,
+                                regime_feature_cols,
+                            )
+                            candidate_validation_windows.append({
+                                **window,
+                                "scores": validation_scores,
+                                "regime_probability": validation_regime_probability,
+                            })
+                            regime_up_pct = round(float((validation_regime_probability >= 0.5).mean() * 100), 2)
+                            candidate_metadata[f"validation_{window['label']}_regime_up_pct"] = regime_up_pct
+                            validation_regime_mix.append((regime_up_pct, window["weight"]))
+                        candidate_metadata["validation_regime_up_pct"] = round(weighted_average(validation_regime_mix, 0.0), 2)
                         candidate_notes = validation_model["notes"]
                     else:
                         validation_model, validation_model_type = fit_model(
@@ -1325,11 +1475,16 @@ def run():
                             model_type,
                             candidate.get("fallback_factory"),
                         )
-                        validation_scores = predict_signal(validation_model, validation[feature_cols])
+                        candidate_validation_windows = [
+                            {
+                                **window,
+                                "scores": predict_signal(validation_model, window["frame"][feature_cols]),
+                                "regime_probability": None,
+                            }
+                            for window in validation_windows
+                        ]
                     long_threshold, short_threshold, allow_short, score_margin, min_hold_days, cooldown_days, uncertainty_margin, stop_loss_pct, validation_metrics = select_thresholds(
-                        validation,
-                        validation_scores,
-                        validation_regime_probability if candidate.get("kind") == "regime_ensemble" else None,
+                        candidate_validation_windows,
                     )
                     validation_metrics["validation_selection_score"] = round(float(validation_selection_score(validation_metrics)), 3)
                     trial = {
@@ -1455,7 +1610,7 @@ def run():
                 "status": "ok",
                 "message": (
                     f"Engineered features with normalized first-order inputs and re-normalized second-order interactions. "
-                    f"Best of {len(candidates)} candidates selected by split-aware turnover-adjusted validation score before the latest two-year test. "
+                    f"Best of {len(candidates)} candidates selected by a split-aware turnover-adjusted 2Y+3Y validation ensemble before the latest two-year test. "
                     f"Regime ensemble candidates first classify recent data into bull/bear regimes, then route to three bull or three bear component models; "
                     f"uncertain regime probabilities can trigger a no-trade filter; "
                     f"Sharpe target {SHARPE_TARGET:.1f} {'met' if target_met else 'not met'} on the latest two-year test."
@@ -1477,6 +1632,7 @@ def run():
                     "recent_data_regime_classifier",
                     "bull_regime_three_model_ensemble",
                     "bear_regime_three_model_ensemble",
+                    "dual_window_validation_ensemble",
                     "split_aware_walk_forward_validation",
                     "regime_uncertainty_no_trade_filter",
                     "close_based_stop_loss_floor",
@@ -1553,8 +1709,10 @@ def run():
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "accelerator": "GPU requested for LightGBM/XGBoost, ExtraTrees CPU parallel",
         "high_volume_rule": f"BTC volume >= rolling 252D {int(HIGH_VOLUME_QUANTILE * 100)}th percentile",
-        "training_window": f"{data['date'].iloc[0]} to {data['date'].iloc[validation_start_index - 1]}",
-        "validation_window": f"{data['date'].iloc[validation_start_index]} to {data['date'].iloc[test_start_index - 1]}",
+        "training_window": f"{data['date'].iloc[0]} to {data['date'].iloc[validation_start_index_3y - 1]}",
+        "validation_window": "2Y + 3Y ensemble ending immediately before the latest two-year backtest",
+        "validation_window_2y": f"{data['date'].iloc[validation_start_index_2y]} to {data['date'].iloc[test_start_index - 1]}",
+        "validation_window_3y": f"{data['date'].iloc[validation_start_index_3y]} to {data['date'].iloc[test_start_index - 1]}",
         "backtest_window": f"{test['date'].iloc[0]} to {test['date'].iloc[-1]}",
         "batch_size": CANDIDATES_PER_MODEL,
         "models_requested": len(model_groups),
@@ -1562,7 +1720,7 @@ def run():
         "sharpe_target": SHARPE_TARGET,
         "transaction_cost_bps": TRANSACTION_COST_BPS,
         "slippage_bps": SLIPPAGE_BPS,
-        "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions, recent-data regime classifier, bull/bear three-model routed ensembles, split-aware validation, and regime-uncertainty no-trade filtering.",
+        "feature_engineering": "Normalized base features, arithmetic second-order interactions, re-normalized interactions, recent-data regime classifier, bull/bear three-model routed ensembles, 2Y+3Y split-aware validation ensemble scoring, and regime-uncertainty no-trade filtering.",
         "base_feature_count": len(base_features),
         "interaction_source_count": len(interaction_sources),
         "regime_feature_count": len(regime_feature_cols),

@@ -25,7 +25,12 @@ SYMBOLS = {
 }
 
 TRAIN_END_OFFSET = 504
-VALIDATION_OFFSET = 252
+VALIDATION_OFFSET_2Y = 504
+VALIDATION_OFFSET_3Y = 756
+VALIDATION_WINDOW_CONFIGS = (
+    {"label": "2y", "offset": VALIDATION_OFFSET_2Y, "weight": 0.5},
+    {"label": "3y", "offset": VALIDATION_OFFSET_3Y, "weight": 0.5},
+)
 HIGH_VOLUME_QUANTILE = 0.60
 MAX_SELECTED_FEATURES = 48
 MAX_FEATURE_CORRELATION = 0.72
@@ -522,9 +527,119 @@ def validation_score(metrics: dict, splits: list[dict]) -> float:
     )
 
 
-def select_thresholds(validation: pd.DataFrame, long_scores: np.ndarray, short_scores: np.ndarray) -> tuple[dict, dict]:
-    long_candidates = sorted(set(float(np.nanquantile(long_scores[validation["high_volume_candle"].to_numpy(dtype=bool)], q)) for q in LONG_QUANTILES))
-    short_candidates = sorted(set(float(np.nanquantile(short_scores[validation["high_volume_candle"].to_numpy(dtype=bool)], q)) for q in SHORT_QUANTILES))
+def weighted_average(values: list[tuple[float, float]], default: float = 0.0) -> float:
+    total_weight = sum(weight for _, weight in values)
+    if total_weight <= 0:
+        return default
+    return float(sum(value * weight for value, weight in values) / total_weight)
+
+
+def summarize_validation_windows(window_evaluations: list[dict]) -> dict:
+    if not window_evaluations:
+        return {
+            "validation_selection_score": -999.0,
+            "validation_ensemble_score": -999.0,
+            "validation_min_window_score": -999.0,
+            "validation_sharpe_ratio": -999.0,
+            "validation_total_return_pct": -999.0,
+            "validation_max_drawdown_pct": -999.0,
+            "validation_total_transaction_cost_pct": 999.0,
+            "validation_trades": 999999.0,
+            "validation_worst_split_sharpe": -999.0,
+            "validation_last_split_sharpe": -999.0,
+            "validation_positive_split_count": 0,
+            "validation_split_count": 0,
+            "validation_split_sharpe_std": 0.0,
+            "validation_recent_decay_penalty": 0.0,
+        }
+
+    recent_window = next((item for item in window_evaluations if item["label"] == "2y"), window_evaluations[0])
+    long_window = next((item for item in window_evaluations if item["label"] == "3y"), window_evaluations[-1])
+    all_split_sharpes = [
+        float(split.get("sharpe_ratio", 0.0))
+        for window in window_evaluations
+        for split in window["splits"]
+    ]
+    positive_split_count = sum(
+        1
+        for window in window_evaluations
+        for split in window["splits"]
+        if float(split.get("total_return_pct", 0.0)) > 0
+    )
+    split_count = sum(len(window["splits"]) for window in window_evaluations)
+    selection_scores = [(float(window["score"]), float(window["weight"])) for window in window_evaluations]
+    sharpe_values = [(float(window["metrics"]["sharpe_ratio"]), float(window["weight"])) for window in window_evaluations]
+    return_values = [(float(window["metrics"]["total_return_pct"]), float(window["weight"])) for window in window_evaluations]
+    cost_values = [(float(window["metrics"]["total_transaction_cost_pct"]), float(window["weight"])) for window in window_evaluations]
+    trade_values = [(float(window["metrics"]["trades"]), float(window["weight"])) for window in window_evaluations]
+    active_values = [int(window["metrics"]["active_observations"]) for window in window_evaluations]
+    min_window_score = min(float(window["score"]) for window in window_evaluations)
+    recent_last_split = recent_window["splits"][-1]["sharpe_ratio"] if recent_window["splits"] else 0.0
+    recent_decay = max(
+        0.0,
+        float(long_window["metrics"]["sharpe_ratio"]) - float(recent_window["metrics"]["sharpe_ratio"]),
+    )
+
+    summary = {
+        "validation_selection_score": round(weighted_average(selection_scores, -999.0), 3),
+        "validation_ensemble_score": round(weighted_average(selection_scores, -999.0), 3),
+        "validation_min_window_score": round(float(min_window_score), 3),
+        "validation_sharpe_ratio": round(weighted_average(sharpe_values, -999.0), 3),
+        "validation_total_return_pct": round(weighted_average(return_values, -999.0), 3),
+        "validation_max_drawdown_pct": round(float(min(float(window["metrics"]["max_drawdown_pct"]) for window in window_evaluations)), 3),
+        "validation_total_transaction_cost_pct": round(weighted_average(cost_values, 999.0), 3),
+        "validation_trades": round(weighted_average(trade_values, 999999.0), 3),
+        "validation_active_observations": int(min(active_values)) if active_values else 0,
+        "validation_worst_split_sharpe": round(float(min(all_split_sharpes)) if all_split_sharpes else 0.0, 3),
+        "validation_last_split_sharpe": round(float(recent_last_split), 3),
+        "validation_positive_split_count": int(positive_split_count),
+        "validation_split_count": int(split_count),
+        "validation_split_sharpe_std": round(float(np.std(all_split_sharpes)) if all_split_sharpes else 0.0, 3),
+        "validation_recent_decay_penalty": round(float(recent_decay), 3),
+    }
+    for window in window_evaluations:
+        label = window["label"]
+        summary[f"validation_{label}_selection_score"] = round(float(window["score"]), 3)
+        summary[f"validation_{label}_sharpe_ratio"] = round(float(window["metrics"]["sharpe_ratio"]), 3)
+        summary[f"validation_{label}_total_return_pct"] = round(float(window["metrics"]["total_return_pct"]), 3)
+        summary[f"validation_{label}_active_observations"] = int(window["metrics"]["active_observations"])
+    return summary
+
+
+def validation_ensemble_rank(metrics: dict) -> tuple[float, float, float, float, int, float, float, float, float]:
+    return (
+        float(metrics.get("validation_selection_score", -999.0)),
+        float(metrics.get("validation_min_window_score", -999.0)),
+        float(metrics.get("validation_sharpe_ratio", -999.0)),
+        float(metrics.get("validation_worst_split_sharpe", -999.0)),
+        int(metrics.get("validation_positive_split_count", 0)),
+        float(metrics.get("validation_total_return_pct", -999.0)),
+        float(metrics.get("validation_max_drawdown_pct", -999.0)),
+        -float(metrics.get("validation_total_transaction_cost_pct", 999.0)),
+        -float(metrics.get("validation_trades", 999999.0)),
+    )
+
+
+def select_thresholds(validation_windows: list[dict], long_scores_by_label: dict[str, np.ndarray], short_scores_by_label: dict[str, np.ndarray]) -> tuple[dict, dict]:
+    high_volume_long_scores = []
+    high_volume_short_scores = []
+    for window in validation_windows:
+        mask = window["frame"]["high_volume_candle"].to_numpy(dtype=bool)
+        label = window["label"]
+        if mask.any():
+            high_volume_long_scores.append(long_scores_by_label[label][mask])
+            high_volume_short_scores.append(short_scores_by_label[label][mask])
+
+    if high_volume_long_scores:
+        long_score_source = np.concatenate(high_volume_long_scores)
+        short_score_source = np.concatenate(high_volume_short_scores)
+    else:
+        first_window = validation_windows[0]
+        long_score_source = long_scores_by_label[first_window["label"]]
+        short_score_source = short_scores_by_label[first_window["label"]]
+
+    long_candidates = sorted(set(float(np.nanquantile(long_score_source, q)) for q in LONG_QUANTILES))
+    short_candidates = sorted(set(float(np.nanquantile(short_score_source, q)) for q in SHORT_QUANTILES))
     best = None
     best_result = None
 
@@ -533,21 +648,36 @@ def select_thresholds(validation: pd.DataFrame, long_scores: np.ndarray, short_s
             for edge_gap in EDGE_GAP_CANDIDATES:
                 for rule in TURNOVER_RULES:
                     for stop_loss_pct in STOP_LOSS_PCT_CANDIDATES:
-                        result = backtest_timing(
-                            validation,
-                            long_scores,
-                            short_scores,
-                            long_threshold,
-                            short_threshold,
-                            edge_gap,
-                            stop_loss_pct=stop_loss_pct,
-                            **rule,
-                        )
-                        metrics = metrics_for(result)
-                        if metrics["active_observations"] < MIN_VALIDATION_ACTIVE_DAYS:
+                        window_evaluations = []
+                        for window in validation_windows:
+                            label = window["label"]
+                            result = backtest_timing(
+                                window["frame"],
+                                long_scores_by_label[label],
+                                short_scores_by_label[label],
+                                long_threshold,
+                                short_threshold,
+                                edge_gap,
+                                stop_loss_pct=stop_loss_pct,
+                                **rule,
+                            )
+                            metrics = metrics_for(result)
+                            if metrics["active_observations"] < MIN_VALIDATION_ACTIVE_DAYS:
+                                window_evaluations = []
+                                break
+                            splits = split_metrics(result, f"validation_{label}")
+                            score = validation_score(metrics, splits)
+                            window_evaluations.append({
+                                "label": label,
+                                "weight": window["weight"],
+                                "metrics": metrics,
+                                "splits": splits,
+                                "score": score,
+                                "result": result,
+                            })
+                        if not window_evaluations:
                             continue
-                        splits = split_metrics(result, "validation")
-                        score = validation_score(metrics, splits)
+                        summary = summarize_validation_windows(window_evaluations)
                         candidate = {
                             "selected_threshold": round(float(long_threshold), 6),
                             "selected_short_threshold": round(float(short_threshold), 6),
@@ -555,23 +685,43 @@ def select_thresholds(validation: pd.DataFrame, long_scores: np.ndarray, short_s
                             "selected_min_hold_days": int(rule["min_hold_days"]),
                             "selected_cooldown_days": int(rule["cooldown_days"]),
                             "selected_stop_loss_pct": round(float(stop_loss_pct), 3),
-                            "validation_selection_score": round(float(score), 3),
-                            "validation_worst_split_sharpe": round(float(min(item["sharpe_ratio"] for item in splits)), 3),
-                            "validation_last_split_sharpe": round(float(splits[-1]["sharpe_ratio"]), 3),
-                            "validation_positive_split_count": sum(1 for item in splits if item["total_return_pct"] > 0),
-                            "validation_split_count": len(splits),
-                            **{f"validation_{key}": value for key, value in metrics.items()},
+                            **summary,
                         }
-                        if best is None or score > best["validation_selection_score"]:
+                        if best is None or validation_ensemble_rank(candidate) > validation_ensemble_rank(best):
                             best = candidate
-                            best_result = result
+                            best_result = recent_result = next(
+                                (window["result"] for window in window_evaluations if window["label"] == "2y"),
+                                window_evaluations[0]["result"],
+                            )
 
     if best is None:
-        long_threshold = float(np.nanquantile(long_scores, 0.85))
-        short_threshold = float(np.nanquantile(short_scores, 0.85))
-        result = backtest_timing(validation, long_scores, short_scores, long_threshold, short_threshold, 0.10, 3, 2, stop_loss_pct=0.0)
-        metrics = metrics_for(result)
-        splits = split_metrics(result, "validation")
+        long_threshold = float(np.nanquantile(long_score_source, 0.85))
+        short_threshold = float(np.nanquantile(short_score_source, 0.85))
+        window_evaluations = []
+        for window in validation_windows:
+            label = window["label"]
+            result = backtest_timing(
+                window["frame"],
+                long_scores_by_label[label],
+                short_scores_by_label[label],
+                long_threshold,
+                short_threshold,
+                0.10,
+                3,
+                2,
+                stop_loss_pct=0.0,
+            )
+            metrics = metrics_for(result)
+            splits = split_metrics(result, f"validation_{label}")
+            window_evaluations.append({
+                "label": label,
+                "weight": window["weight"],
+                "metrics": metrics,
+                "splits": splits,
+                "score": validation_score(metrics, splits),
+                "result": result,
+            })
+        summary = summarize_validation_windows(window_evaluations)
         best = {
             "selected_threshold": round(float(long_threshold), 6),
             "selected_short_threshold": round(float(short_threshold), 6),
@@ -579,14 +729,9 @@ def select_thresholds(validation: pd.DataFrame, long_scores: np.ndarray, short_s
             "selected_min_hold_days": 3,
             "selected_cooldown_days": 2,
             "selected_stop_loss_pct": 0.0,
-            "validation_selection_score": round(float(validation_score(metrics, splits)), 3),
-            "validation_worst_split_sharpe": round(float(min(item["sharpe_ratio"] for item in splits)), 3),
-            "validation_last_split_sharpe": round(float(splits[-1]["sharpe_ratio"]), 3),
-            "validation_positive_split_count": sum(1 for item in splits if item["total_return_pct"] > 0),
-            "validation_split_count": len(splits),
-            **{f"validation_{key}": value for key, value in metrics.items()},
+            **summary,
         }
-        best_result = result
+        best_result = next((window["result"] for window in window_evaluations if window["label"] == "2y"), window_evaluations[0]["result"])
 
     return best, best_result
 
@@ -635,14 +780,26 @@ def package_gate(metrics: dict, splits: list[dict], validation_metrics: dict) ->
 
 def run() -> None:
     data, base_features = build_dataset()
-    if len(data) <= TRAIN_END_OFFSET + VALIDATION_OFFSET + 200:
+    if len(data) <= TRAIN_END_OFFSET + VALIDATION_OFFSET_3Y + 200:
         raise RuntimeError("Not enough history for timing experiment.")
 
     test_start_index = len(data) - TRAIN_END_OFFSET
-    validation_start_index = test_start_index - VALIDATION_OFFSET
-    model_frame, feature_cols, feature_selection = build_model_frame(data, base_features, validation_start_index)
-    fit = model_frame.iloc[:validation_start_index].copy()
-    validation = model_frame.iloc[validation_start_index:test_start_index].copy()
+    validation_start_index_2y = test_start_index - VALIDATION_OFFSET_2Y
+    validation_start_index_3y = test_start_index - VALIDATION_OFFSET_3Y
+    model_frame, feature_cols, feature_selection = build_model_frame(data, base_features, validation_start_index_3y)
+    fit = model_frame.iloc[:validation_start_index_3y].copy()
+    validation_windows = [
+        {
+            "label": "2y",
+            "weight": 0.5,
+            "frame": model_frame.iloc[validation_start_index_2y:test_start_index].copy(),
+        },
+        {
+            "label": "3y",
+            "weight": 0.5,
+            "frame": model_frame.iloc[validation_start_index_3y:test_start_index].copy(),
+        },
+    ]
     train_full = model_frame.iloc[:test_start_index].copy()
     test = model_frame.iloc[test_start_index:].copy()
 
@@ -655,9 +812,15 @@ def run() -> None:
         try:
             print(f"Running simple timing model: {spec['name']}")
             validation_long_model, validation_short_model, validation_model_type = fit_model_pair(spec, fit, feature_cols)
-            validation_long_scores = predict_proba(validation_long_model, validation, feature_cols)
-            validation_short_scores = predict_proba(validation_short_model, validation, feature_cols)
-            threshold_config, _ = select_thresholds(validation, validation_long_scores, validation_short_scores)
+            validation_long_scores = {
+                window["label"]: predict_proba(validation_long_model, window["frame"], feature_cols)
+                for window in validation_windows
+            }
+            validation_short_scores = {
+                window["label"]: predict_proba(validation_short_model, window["frame"], feature_cols)
+                for window in validation_windows
+            }
+            threshold_config, _ = select_thresholds(validation_windows, validation_long_scores, validation_short_scores)
 
             final_long_model, final_short_model, final_model_type = fit_model_pair(spec, train_full, feature_cols)
             test_long_scores = predict_proba(final_long_model, test, feature_cols)
@@ -683,7 +846,7 @@ def run() -> None:
                 "status": "ok",
                 "message": (
                     "Simple timing model: shallow two-head long/short classifiers target 3-day moves beyond a rolling noise floor. "
-                    "The model uses only selected first-order features, no second-order interaction pool, and trades only when timing edge exceeds validation-selected thresholds."
+                    "The model uses only selected first-order features, no second-order interaction pool, and trades only when timing edge exceeds thresholds selected by a 2Y+3Y validation ensemble."
                 ),
                 "backtest_start": str(test["date"].iloc[0]),
                 "backtest_end": str(test["date"].iloc[-1]),
@@ -763,8 +926,10 @@ def run() -> None:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "accelerator": "GPU requested for simple XGBoost timing model; ExtraTrees CPU parallel baseline",
         "high_volume_rule": f"BTC volume >= rolling 252D {int(HIGH_VOLUME_QUANTILE * 100)}th percentile",
-        "training_window": f"{data['date'].iloc[0]} to {data['date'].iloc[validation_start_index - 1]}",
-        "validation_window": f"{data['date'].iloc[validation_start_index]} to {data['date'].iloc[test_start_index - 1]}",
+        "training_window": f"{data['date'].iloc[0]} to {data['date'].iloc[validation_start_index_3y - 1]}",
+        "validation_window": "2Y + 3Y ensemble ending immediately before the latest two-year backtest",
+        "validation_window_2y": f"{data['date'].iloc[validation_start_index_2y]} to {data['date'].iloc[test_start_index - 1]}",
+        "validation_window_3y": f"{data['date'].iloc[validation_start_index_3y]} to {data['date'].iloc[test_start_index - 1]}",
         "backtest_window": f"{test['date'].iloc[0]} to {test['date'].iloc[-1]}",
         "batch_size": len(model_rows),
         "models_requested": len(model_rows),
@@ -772,7 +937,7 @@ def run() -> None:
         "sharpe_target": SHARPE_TARGET,
         "transaction_cost_bps": TRANSACTION_COST_BPS,
         "slippage_bps": SLIPPAGE_BPS,
-        "feature_engineering": "Simple first-order features, no interaction pool, rolling-noise 3-day timing target, and validation-selected entry timing thresholds.",
+        "feature_engineering": "Simple first-order features, no interaction pool, rolling-noise 3-day timing target, and 2Y+3Y validation-ensemble entry timing thresholds.",
         "base_feature_count": len(base_features),
         "interaction_source_count": 0,
         "feature_candidate_count": len(base_features),

@@ -215,6 +215,12 @@ class KaggleModelResult(BaseModel):
     selected_hyperparameters: dict = {}
     candidate_trials: list[dict] = []
     validation_sharpe_ratio: float | None = None
+    validation_ensemble_score: float | None = None
+    validation_min_window_score: float | None = None
+    validation_2y_selection_score: float | None = None
+    validation_3y_selection_score: float | None = None
+    validation_2y_sharpe_ratio: float | None = None
+    validation_3y_sharpe_ratio: float | None = None
     validation_worst_split_sharpe: float | None = None
     validation_last_split_sharpe: float | None = None
     validation_positive_split_count: int | None = None
@@ -248,6 +254,8 @@ class KaggleModelRun(BaseModel):
     high_volume_rule: str
     training_window: str
     validation_window: str | None = None
+    validation_window_2y: str | None = None
+    validation_window_3y: str | None = None
     backtest_window: str
     batch_size: int
     models_requested: int
