@@ -41,7 +41,8 @@ select {
   min-height: 100vh;
   padding: 32px;
   background:
-    linear-gradient(180deg, #ffffff 0, rgba(255, 255, 255, 0) 260px),
+    linear-gradient(180deg, #fcfdfd 0, #f1f5f5 42%, #eef3f3 100%),
+    linear-gradient(135deg, rgba(14, 138, 115, 0.04) 0, rgba(14, 138, 115, 0) 38%),
     var(--background);
 }
 
@@ -56,8 +57,8 @@ select {
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 20px;
-  padding: 22px 0 26px;
-  border-bottom: 1px solid var(--line);
+  padding: 24px 0 28px;
+  border-bottom: 1px solid rgba(21, 25, 29, 0.08);
 }
 
 .eyebrow {
@@ -108,11 +109,18 @@ h1 {
   padding: 13px;
   color: var(--foreground);
   text-align: left;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #ffffff 0, #f9fbfb 100%);
+  border: 1px solid rgba(21, 25, 29, 0.08);
   border-radius: 8px;
-  box-shadow: 0 10px 24px rgba(16, 26, 34, 0.05);
+  box-shadow: 0 12px 28px rgba(16, 26, 34, 0.06);
   cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.page-switcher button:hover {
+  border-color: rgba(14, 138, 115, 0.22);
+  box-shadow: 0 16px 30px rgba(16, 26, 34, 0.08);
+  transform: translateY(-1px);
 }
 
 .page-switcher strong,
@@ -142,8 +150,9 @@ h1 {
 
 .page-switcher .page-tab-active {
   color: #ffffff;
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  background: linear-gradient(180deg, #0e8a73 0, #096455 100%);
+  border-color: #096455;
+  box-shadow: 0 18px 34px rgba(9, 100, 85, 0.22);
 }
 
 .page-switcher .page-tab-active span {
@@ -162,9 +171,10 @@ h1 {
   gap: 12px;
   margin-bottom: 18px;
   padding: 10px 12px;
-  background: var(--ink-soft);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(21, 25, 29, 0.08);
   border-radius: 8px;
+  backdrop-filter: blur(8px);
 }
 
 .page-turner button {
@@ -194,9 +204,9 @@ h1 {
 .panel {
   grid-column: span 12;
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(21, 25, 29, 0.08);
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 18px 40px rgba(16, 26, 34, 0.08);
   padding: 22px;
 }
 
